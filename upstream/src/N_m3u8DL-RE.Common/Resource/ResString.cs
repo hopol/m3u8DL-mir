@@ -36,7 +36,12 @@ public static class ResString
     public static string cmd_maxSpeed => GetText("cmd_maxSpeed");
     public static string cmd_adKeyword => GetText("cmd_adKeyword");
     public static string cmd_moreHelp => GetText("cmd_moreHelp");
+    public static string cmd_generateCompletion => GetText("cmd_generateCompletion");
+    public static string completionShellInvalid => GetText("completionShellInvalid");
     public static string cmd_header => GetText("cmd_header");
+    public static string cmd_cookies => GetText("cmd_cookies");
+    public static string cookiesFileReadFailed => GetText("cookiesFileReadFailed");
+    public static string cookiesFileInvalidLine => GetText("cookiesFileInvalidLine");
     public static string cmd_muxImport => GetText("cmd_muxImport");
     public static string cmd_muxImport_more => GetText("cmd_muxImport_more");
     public static string cmd_selectVideo => GetText("cmd_selectVideo");
@@ -52,6 +57,7 @@ public static class ResString
     public static string cmd_customHLSMethod => GetText("cmd_customHLSMethod");
     public static string cmd_customHLSKey => GetText("cmd_customHLSKey");
     public static string cmd_customHLSIv => GetText("cmd_customHLSIv");
+    public static string cmd_customHLSScope => GetText("cmd_customHLSScope");
     public static string cmd_Input => GetText("cmd_Input");
     public static string cmd_forceAnsiConsole => GetText("cmd_forceAnsiConsole");
     public static string cmd_noAnsiColor => GetText("cmd_noAnsiColor");
@@ -83,12 +89,18 @@ public static class ResString
     public static string cmd_concurrentDownload => GetText("cmd_concurrentDownload");
     public static string cmd_useSystemProxy => GetText("cmd_useSystemProxy");
     public static string cmd_customProxy => GetText("cmd_customProxy");
+    public static string cmd_networkInterface => GetText("cmd_networkInterface");
+    public static string networkInterfaceInvalid => GetText("networkInterfaceInvalid");
+    public static string networkInterfaceUnsupported => GetText("networkInterfaceUnsupported");
+    public static string networkInterfaceBindFailed => GetText("networkInterfaceBindFailed");
+    public static string networkInterfaceConnectFailed => GetText("networkInterfaceConnectFailed");
     public static string cmd_customRange => GetText("cmd_customRange");
     public static string cmd_liveKeepSegments => GetText("cmd_liveKeepSegments");
     public static string cmd_livePipeMux => GetText("cmd_livePipeMux");
     public static string cmd_liveRecordLimit => GetText("cmd_liveRecordLimit");
     public static string cmd_taskStartAt => GetText("cmd_taskStartAt");
     public static string cmd_liveWaitTime => GetText("cmd_liveWaitTime");
+    public static string cmd_liveIdleTimeout => GetText("cmd_liveIdleTimeout");
     public static string cmd_liveTakeCount => GetText("cmd_liveTakeCount");
     public static string cmd_liveFixVttByAudio => GetText("cmd_liveFixVttByAudio");
     public static string cmd_liveRealTimeMerge => GetText("cmd_liveRealTimeMerge");
@@ -100,6 +112,7 @@ public static class ResString
     public static string realTimeDecMessage => GetText("realTimeDecMessage");
     public static string liveLimitReached => GetText("liveLimitReached");
     public static string liveStreamEnded => GetText("liveStreamEnded");
+    public static string liveIdleTimeoutReached => GetText("liveIdleTimeoutReached");
     public static string saveName => GetText("saveName");
     public static string taskStartAt => GetText("taskStartAt");
     public static string namedPipeCreated => GetText("namedPipeCreated");
@@ -143,6 +156,40 @@ public static class ResString
     public static string loadUrlFailed => GetText("loadUrlFailed");
     public static string newVersionFound => GetText("newVersionFound");
     public static string processImageSub => GetText("processImageSub");
+
+    public static string vodPartsConcat => GetText("vodPartsConcat");
+    public static string vodPeriodsPlanned => GetText("vodPeriodsPlanned");
+    public static string vodPeriodNoMatch => GetText("vodPeriodNoMatch");
+    public static string vodPeriodIncompatible => GetText("vodPeriodIncompatible");
+    public static string vodPartsIncompatible => GetText("vodPartsIncompatible");
+    public static string vodPartStillEncrypted => GetText("vodPartStillEncrypted");
+    public static string webmInvalid => GetText("webmInvalid");
+    public static string vodMediaOutsidePeriod => GetText("vodMediaOutsidePeriod");
+    public static string vodDropPartsInvalid => GetText("vodDropPartsInvalid");
+    public static string vodDropPartsRangeInvalid => GetText("vodDropPartsRangeInvalid");
+    public static string vodPartIdsUnknown => GetText("vodPartIdsUnknown");
+    public static string vodSelectAtLeastOne => GetText("vodSelectAtLeastOne");
+    public static string vodPartsRequireVod => GetText("vodPartsRequireVod");
+    public static string vodPartsRequireInteractive => GetText("vodPartsRequireInteractive");
+    public static string hlsMediaOriginReadFailed => GetText("hlsMediaOriginReadFailed");
+    public static string hlsSubtitleOriginMissing => GetText("hlsSubtitleOriginMissing");
+    public static string hlsTimestampMapInvalid => GetText("hlsTimestampMapInvalid");
+    public static string hlsByteRangeMissingPrevious => GetText("hlsByteRangeMissingPrevious");
+    public static string mediaPartInputMismatch => GetText("mediaPartInputMismatch");
+    public static string concatInputPathInvalid => GetText("concatInputPathInvalid");
+    public static string tfdtVersionUnsupported => GetText("tfdtVersionUnsupported");
+    public static string vodPartIdsLabel => GetText("vodPartIdsLabel");
+    public static string downloadCancelled => GetText("downloadCancelled");
+    public static string cmd_vodSelectParts => GetText("cmd_vodSelectParts");
+    public static string vodReadingConfigs => GetText("vodReadingConfigs");
+    public static string vodPromptTitle => GetText("vodPromptTitle");
+    public static string vodPromptInfo => GetText("vodPromptInfo");
+    public static string vodSectionDuration => GetText("vodSectionDuration");
+    public static string vodPartCount => GetText("vodPartCount");
+    public static string vodAvailableConfigs => GetText("vodAvailableConfigs");
+    public static string vodConfigUnknown => GetText("vodConfigUnknown");
+    public static string cmd_vodListParts => GetText("cmd_vodListParts");
+    public static string cmd_vodDropParts => GetText("cmd_vodDropParts");
 
     private static string GetText(string key)
     {

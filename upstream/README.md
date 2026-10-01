@@ -24,11 +24,33 @@ yay -Syu n-m3u8dl-re-git
 
 ---
 
+## PowerShell 补全
+
+支持 Windows PowerShell 5.1 和 PowerShell 7。补全脚本内嵌在可执行文件中。将 `N_m3u8DL-RE` 加入 `PATH`，然后在 PowerShell 中加载：
+
+```powershell
+N_m3u8DL-RE --generate-completion powershell | Out-String | Invoke-Expression
+```
+
+输入 `N_m3u8DL-RE --sub-` 后按 Tab 可补全参数名；`--sub-format`、`--log-level`、`--ui-language` 等参数可补全可选值，文件和目录使用 PowerShell 的默认路径补全。以 `./N_m3u8DL-RE` 或完整路径调用程序时也可以使用。
+
+加载仅对当前会话有效。如需每次启动时启用，可将上面的命令写入 `$PROFILE`。也可用 `--generate-completion powershell` 单独查看或保存脚本。
+
+## Cookie 文件
+
+使用 `--cookies cookies.txt` 读取浏览器导出的 Netscape 格式 Cookie 文件：
+
+```text
+N_m3u8DL-RE "https://example.com/video.m3u8" --cookies "cookies.txt"
+```
+
+Cookie 会按请求的域名、路径、HTTPS 条件及有效期匹配，适用于清单、密钥、初始化文件和分片，支持点播及直播。若同时设置 `-H "Cookie: ..."`，则以手动请求头为准。服务器更新的 Cookie 仅保存在内存中，不回写文件。
+
 ## 命令行参数
 
 ```
 Description:
-  N_m3u8DL-RE (Beta version) 20251027
+  N_m3u8DL-RE 0.6.0 20260628
 
 Usage:
   N_m3u8DL-RE <input> [options]
@@ -66,6 +88,7 @@ Options:
   -mt, --concurrent-download                              并发下载已选择的音频、视频和字幕 [default: False]
   -H, --header <header>                                   为HTTP请求设置特定的请求头, 例如:
                                                           -H "Cookie: mycookie" -H "User-Agent: iOS"
+  --cookies <FILE>                                       读取 Netscape 格式的 Cookie 文件；手动 Cookie 请求头优先
   --sub-only                                              只选取字幕轨道 [default: False]
   --sub-format <SRT|VTT>                                  字幕输出类型 [default: SRT]
   --auto-subtitle-fix                                     自动修正字幕 [default: True]
@@ -85,8 +108,10 @@ Options:
   --custom-hls-method <METHOD>                            指定HLS加密方式 (AES_128|AES_128_ECB|CENC|CHACHA20|NONE|SAMPLE_AES|SAMPLE_AES_CTR|UNKNOWN)
   --custom-hls-key <FILE|HEX|BASE64>                      指定HLS解密KEY. 可以是文件, HEX或Base64
   --custom-hls-iv <FILE|HEX|BASE64>                       指定HLS解密IV. 可以是文件, HEX或Base64
+  --custom-hls-scope <SCOPE>                              指定自定义HLS加密方式、KEY和IV的适用范围 (ALL|VIDEO|AUDIO) [default: ALL]
   --use-system-proxy                                      使用系统默认代理 [default: True]
   --custom-proxy <URL>                                    设置请求代理, 如 http://127.0.0.1:8888
+  --interface <INTERFACE>                                 指定请求使用的网卡名或本机 IP
   --custom-range <RANGE>                                  仅下载部分分片. 输入 "--morehelp custom-range" 以查看详细信息
   --task-start-at <yyyyMMddHHmmss>                        在此时间之前不会开始执行任务
   --live-perform-as-vod                                   以点播方式下载直播流 [default: False]
@@ -96,6 +121,7 @@ Options:
   --live-fix-vtt-by-audio                                 通过读取音频文件的起始时间修正VTT字幕 [default: False]
   --live-record-limit <HH:mm:ss>                          录制直播时的录制时长限制
   --live-wait-time <SEC>                                  手动设置直播列表刷新间隔
+  --live-idle-timeout <SEC>                               直播列表连续指定秒数无新分片时停止录制（默认关闭）
   --live-take-count <NUM>                                 手动设置录制直播时首次获取分片的数量 [default: 16]
   --mux-import <OPTIONS>                                  混流时引入外部媒体文件. 输入 "--morehelp mux-import" 以查看详细信息
   -sv, --select-video <OPTIONS>                           通过正则表达式选择符合要求的视频流. 输入 "--morehelp select-video" 以查看详细信息
@@ -105,12 +131,24 @@ Options:
   -da, --drop-audio <OPTIONS>                             通过正则表达式去除符合要求的音频流.
   -ds, --drop-subtitle <OPTIONS>                          通过正则表达式去除符合要求的字幕流.
   --ad-keyword <REG>                                      设置广告分片的URL关键字(正则表达式)
+  --vod-select-parts                                      点播选段交互：不传自动判断，true 强制显示，false 关闭
+  --vod-list-parts                                        按媒体配置归组列出点播段编号及总时长后退出
+  --vod-drop-parts <IDS>                                  删除整个点播段及对应音频/字幕，例如 0,2-4
   --disable-update-check                                  禁用版本更新检测 [default: False]
-  --allow-hls-multi-ext-map                               允许HLS中的多个#EXT-X-MAP(实验性) [default: False]
+  --allow-hls-multi-ext-map                               允许直播HLS中的多个#EXT-X-MAP(实验性；点播默认支持) [default: False]
   --morehelp <OPTION>                                     查看某个选项的详细帮助信息
+  --generate-completion <SHELL>                           输出内嵌的补全脚本（powershell）
   -?, -h, --help                                          Show help and usage information
   --version                                               Show version information
 ```
+
+`--interface` 支持网卡名（如 `eth1`、`en0`、`Wi-Fi`）或本机 IP 地址。网卡名约束实际出口，IP 地址指定连接的源地址。使用代理时，约束应用于本机到代理的连接；DNS 仍由系统解析。绑定失败会明确报错，不会回退到其他网卡。Linux 按网卡名绑定可能需要额外权限，报错会包含系统原因。
+
+`--custom-hls-scope VIDEO` 仅对主播放列表中的视频流应用 `--custom-hls-method`、`--custom-hls-key` 和 `--custom-hls-iv`；`AUDIO` 仅对音频流应用。纯音频变体可通过 `CODECS` 识别；缺少足够类型信息的主变体仍按视频处理。默认 `ALL` 保持原有行为。直接输入单条媒体播放列表时无法识别轨道类型，自定义参数会应用于该播放列表。
+
+交互下载多段点播时，会按实际媒体配置归组，用空格勾选要保留的组、回车确认；默认全部保留。相同配置的重复段只显示一次，时长存在明显间隔时再按段时长分组，不自动判定广告。HLS 会读取各类 init 的实际编码、分辨率及音频配置，界面不显示 init URL。不传 `--vod-select-parts` 时自动判断是否显示；使用 `--auto-select` 或选流过滤器时不自动弹出。`--vod-select-parts`（或 `--vod-select-parts true`）强制显示，`--vod-select-parts false` 明确关闭选段交互；相同配置且时长接近的广告仍需用 URL 规则或编号排除。
+
+脚本可用 `--vod-list-parts` 查看归组后的原始编号，再用 `--vod-drop-parts 0,2-4` 删除指定段。DASH 编号为原 Period 顺序（从 0 开始），HLS 为原不连续序号（起点可能不同）；同一不连续段的 MAP 一并处理，音视频和字幕同步删除。没有独立不连续标记的 HLS MAP 可用 `--ad-keyword` 匹配 init/媒体 URL。`--custom-range` 仍使用源分片编号，选择后不重排。
 
 <details>
 <summary>点击查看More Help</summary>

@@ -22,11 +22,33 @@ yay -Syu n-m3u8dl-re-git
 
 ---
 
+## PowerShell completion
+
+Supports Windows PowerShell 5.1 and PowerShell 7. The completion script is embedded in the executable. Add `N_m3u8DL-RE` to `PATH`, then load it in PowerShell:
+
+```powershell
+N_m3u8DL-RE --generate-completion powershell | Out-String | Invoke-Expression
+```
+
+Type `N_m3u8DL-RE --sub-` and press Tab to complete option names. Options such as `--sub-format`, `--log-level` and `--ui-language` also complete their accepted values. Files and directories use PowerShell's default path completion. Calling the executable with `./N_m3u8DL-RE` or its full path also works.
+
+Loading applies to the current session. To enable completion on startup, add the command above to `$PROFILE`. Use `--generate-completion powershell` on its own to view or save the script.
+
+## Cookie files
+
+Use `--cookies cookies.txt` to load a browser export in Netscape cookie format:
+
+```text
+N_m3u8DL-RE "https://example.com/video.m3u8" --cookies "cookies.txt"
+```
+
+Cookies are matched by domain, path, HTTPS requirement and expiration for manifests, keys, initialization files and segments, including VOD and live streams. A custom `-H "Cookie: ..."` header takes precedence. Server cookie updates are kept in memory and are not written back to the file.
+
 ## Command line parameters
 
 ```
 Description:
-  N_m3u8DL-RE (Beta version) 20241203
+  N_m3u8DL-RE 0.6.0 20260628
 
 Usage:
   N_m3u8DL-RE <input> [options]
@@ -63,6 +85,7 @@ Options:
                                                           [default: False]
   -H, --header <header>                                   Pass custom header(s) to server, Example:
                                                           -H "Cookie: mycookie" -H "User-Agent: iOS"
+  --cookies <FILE>                                       Load a Netscape cookie file; a custom Cookie header takes precedence
   --sub-only                                              Select only subtitle tracks [default: False]
   --sub-format <SRT|VTT>                                  Subtitle output format [default: SRT]
   --auto-subtitle-fix                                     Automatically fix subtitles [default: True]
@@ -89,8 +112,10 @@ Options:
                                                           CTR|UNKNOWN)
   --custom-hls-key <FILE|HEX|BASE64>                      Set the HLS decryption key. Can be file, HEX or Base64
   --custom-hls-iv <FILE|HEX|BASE64>                       Set the HLS decryption iv. Can be file, HEX or Base64
+  --custom-hls-scope <SCOPE>                              Apply custom HLS method, key and IV to selected media type (ALL|VIDEO|AUDIO) [default: ALL]
   --use-system-proxy                                      Use system default proxy [default: True]
   --custom-proxy <URL>                                    Set web request proxy, like http://127.0.0.1:8888
+  --interface <INTERFACE>                                 Use the specified network interface or local IP address
   --custom-range <RANGE>                                  Download only part of the segments. Use "--morehelp
                                                           custom-range" for more details
   --task-start-at <yyyyMMddHHmmss>                        Task execution will not start before this time
@@ -104,6 +129,8 @@ Options:
                                                           [default: False]
   --live-record-limit <HH:mm:ss>                          Recording time limit when recording live
   --live-wait-time <SEC>                                  Manually set the live playlist refresh interval
+  --live-idle-timeout <SEC>                               Stop recording when a live playlist has no new segments for
+                                                          this many seconds (disabled by default)
   --live-take-count <NUM>                                 Manually set the number of segments downloaded for the first
                                                           time when recording live [default: 16]
   --mux-import <OPTIONS>                                  When MuxAfterDone enabled, allow to import local media files.
@@ -118,13 +145,25 @@ Options:
   -da, --drop-audio <OPTIONS>                             Drop audio streams by regular expressions.
   -ds, --drop-subtitle <OPTIONS>                          Drop subtitle streams by regular expressions.
   --ad-keyword <REG>                                      Set URL keywords (regular expressions) for AD segments
+  --vod-select-parts                                      VOD section selection: omitted = automatic, true = always prompt, false = disable
+  --vod-list-parts                                        List grouped VOD section IDs and total durations, then exit
+  --vod-drop-parts <IDS>                                  Drop VOD sections and matching audio/subtitles, e.g. 0,2-4
   --disable-update-check                                  Disable version update check [default: False]
-  --allow-hls-multi-ext-map                               Allow multiple #EXT-X-MAP in HLS (experimental) [default:
+  --allow-hls-multi-ext-map                               Allow multiple #EXT-X-MAP in live HLS (experimental; enabled for VOD) [default:
                                                           False]
   --morehelp <OPTION>                                     Set more help info about one option
+  --generate-completion <SHELL>                           Print the embedded completion script (powershell)
   --version                                               Show version information
   -?, -h, --help                                          Show help and usage information
 ```
+
+`--interface` accepts a network interface name (e.g. `eth1`, `en0` or `Wi-Fi`) or a local IP address. A name constrains the outgoing interface; an IP binds the connection source address. With a proxy, it applies to the connection to the proxy. DNS uses the system resolver. Binding failures are reported without falling back to another interface. Linux binding by name may require additional permissions; the diagnostic includes the system error.
+
+`--custom-hls-scope VIDEO` applies `--custom-hls-method`, `--custom-hls-key`, and `--custom-hls-iv` only to video renditions in a master playlist; `AUDIO` selects audio renditions. Audio-only variants can be identified through `CODECS`; variants without enough type information still use the video scope. The default `ALL` preserves the existing behavior. A standalone media playlist has no rendition type, so the custom settings apply to that playlist.
+
+Interactive VOD downloads group repeated sections by actual media configuration. Use Space to toggle groups and Enter to confirm; all groups are kept by default. A clear gap in section durations further separates groups without classifying ads automatically. HLS inspects each distinct init for codecs, resolution and audio configuration; init URLs are omitted from the UI. Omitting `--vod-select-parts` keeps automatic detection; `--auto-select` and stream filters do not trigger this prompt automatically. Use `--vod-select-parts` (or `--vod-select-parts true`) to force the prompt, or `--vod-select-parts false` to disable section selection. Ads with the same configuration and similar durations still require URL rules or explicit section IDs.
+
+For scripts, `--vod-list-parts` lists grouped original section IDs and `--vod-drop-parts 0,2-4` removes specified sections across video, audio and subtitles. DASH IDs are original Period positions starting at 0; HLS uses original discontinuity sequence numbers. All MAPs within a discontinuity section stay together. For MAP changes without discontinuities, use `--ad-keyword` to match init/media URLs. `--custom-range` retains source segment indices after selection.
 
 <details>
 <summary>Click to view "More Help" section</summary>

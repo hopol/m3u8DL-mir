@@ -1,8 +1,10 @@
+using N_m3u8DL_RE.Common.Resource;
 using N_m3u8DL_RE.Common.Entity;
 using N_m3u8DL_RE.Common.Enum;
 using N_m3u8DL_RE.Common.Log;
 using N_m3u8DL_RE.Config;
 using N_m3u8DL_RE.Crypto;
+using N_m3u8DL_RE.DownloadManager;
 using N_m3u8DL_RE.Entity;
 using N_m3u8DL_RE.Util;
 using Spectre.Console;
@@ -21,10 +23,10 @@ internal class SimpleDownloader : IDownloader
         DownloaderConfig = config;
     }
 
-    public async Task<DownloadResult?> DownloadSegmentAsync(MediaSegment segment, string savePath, SpeedContainer speedContainer, Dictionary<string, string>? headers = null)
+    public async Task<DownloadResult?> DownloadSegmentAsync(MediaSegment segment, string savePath, SpeedContainer speedContainer, Dictionary<string, string>? headers = null, bool singleFile = false)
     {
         var url = segment.Url;
-        var (des, dResult) = await DownClipAsync(url, savePath, speedContainer, segment.StartRange, segment.StopRange, headers, DownloaderConfig.MyOptions.DownloadRetryCount);
+        var (des, dResult) = await DownClipAsync(url, savePath, speedContainer, segment.StartRange, segment.StopRange, headers, DownloaderConfig.MyOptions.DownloadRetryCount, singleFile);
         if (dResult is { Success: true } && dResult.ActualFilePath != des)
         {
             switch (segment.EncryptInfo.Method)
@@ -76,9 +78,11 @@ internal class SimpleDownloader : IDownloader
         return dResult;
     }
 
-    private async Task<(string des, DownloadResult? dResult)> DownClipAsync(string url, string path, SpeedContainer speedContainer, long? fromPosition, long? toPosition, Dictionary<string, string>? headers = null, int retryCount = 3)
+    private async Task<(string des, DownloadResult? dResult)> DownClipAsync(string url, string path, SpeedContainer speedContainer, long? fromPosition, long? toPosition, Dictionary<string, string>? headers = null, int retryCount = 3, bool singleFile = false)
     {
         CancellationTokenSource? cancellationTokenSource = null;
+        Task? watcher = null;
+        var binaryStarted = false;
         retry:
         try
         {
@@ -100,21 +104,59 @@ internal class SimpleDownloader : IDownloader
                 return (dec, new DownloadResult() { ActualContentLength = 0, ActualFilePath = dec });
             }
 
+            if (singleFile)
+            {
+                // .tmp 可能来自旧流程的失败下载；新下载器只从有身份校验的 .downloading 续传。
+                File.Delete(path);
+                var timeout = DownloaderConfig.MyOptions.HttpRequestTimeout;
+                var downloader = new BinaryDownloadManager(readTimeout: timeout > 0 ? TimeSpan.FromSeconds(timeout) : null);
+                var baseDownloaded = speedContainer.RDownloaded;
+                long credited = 0;
+                long? length = null;
+                await downloader.DownloadAsync(url, path, headers ?? [], DownloaderConfig.MyOptions.ThreadCount, retryCount,
+                    onLength: value =>
+                    {
+                        binaryStarted = true;
+                        length = value;
+                        speedContainer.ResponseLength = value == null ? null : baseDownloaded + value;
+                    },
+                    onReceived: bytes => speedContainer.AddReceived(bytes),
+                    onDownloaded: bytes =>
+                    {
+                        // Range 块失败及顺序下载重启都会回退有效字节，不把重传累计为进度。
+                        speedContainer.AddDownloaded(bytes - credited);
+                        credited = bytes;
+                    },
+                    cancellationToken: cancellationTokenSource.Token, maxSpeed: DownloaderConfig.MyOptions.MaxSpeed);
+                using var input = File.OpenRead(path);
+                var prefix = new byte[Math.Min(16 * 1024, input.Length)];
+                await input.ReadExactlyAsync(prefix);
+                return (des, new DownloadResult
+                {
+                    ActualFilePath = path, ActualContentLength = input.Length, RespContentLength = length,
+                    ImageHeader = ImageHeaderUtil.IsImageHeader(prefix),
+                    GzipHeader = prefix.Length > 2 && prefix[0] == 0x1f && prefix[1] == 0x8b,
+                });
+            }
+
             // 另起线程进行监控
             var cts = cancellationTokenSource;
-            using var watcher = Task.Factory.StartNew(async () =>
+            watcher = Task.Run(async () =>
             {
-                while (true)
+                try
                 {
-                    if (cts.IsCancellationRequested) break;
-                    if (speedContainer.ShouldStop)
+                    while (!cts.IsCancellationRequested)
                     {
-                        cts.Cancel();
-                        Logger.DebugMarkUp("Cancel...");
-                        break;
+                        if (speedContainer.ShouldStop)
+                        {
+                            cts.Cancel();
+                            Logger.DebugMarkUp(ResString.downloadCancelled);
+                            break;
+                        }
+                        await Task.Delay(500, cts.Token);
                     }
-                    await Task.Delay(500);
                 }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
             });
 
             // 调用下载
@@ -128,7 +170,8 @@ internal class SimpleDownloader : IDownloader
             Logger.DebugMarkUp($"[grey]{ex.Message.EscapeMarkup()} retryCount: {retryCount}[/]");
             Logger.Debug(url + " " + ex);
             Logger.Extra($"Ah oh!{Environment.NewLine}RetryCount => {retryCount}{Environment.NewLine}Exception  => {ex.Message}{Environment.NewLine}Url        => {url}");
-            if (retryCount-- > 0)
+            // 整文件的正文重试由 BinaryDownloadManager 负责，不能在外层再次重下。
+            if (!binaryStarted && retryCount-- > 0)
             {
                 await Task.Delay(1000);
                 goto retry;
@@ -145,7 +188,12 @@ internal class SimpleDownloader : IDownloader
         {
             if (cancellationTokenSource != null)
             {
-                // 调用后销毁
+                // 快速下载可能在监控任务启动前完成，不能 Dispose 尚未完成的 Task。
+                // 先取消并等待监控退出，再销毁 CTS，避免竞态导致成功下载被误判失败。
+                cancellationTokenSource.Cancel();
+                if (watcher != null)
+                    await watcher;
+                watcher = null;
                 cancellationTokenSource.Dispose();
                 cancellationTokenSource = null;
             }

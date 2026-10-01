@@ -9,13 +9,17 @@ using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Globalization;
 using System.Net;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace N_m3u8DL_RE.CommandLine;
 
 internal static partial class CommandInvoker
 {
-    public const string VERSION_INFO = "N_m3u8DL-RE (Beta version) 20260628";
+    private static readonly Assembly AppAssembly = typeof(CommandInvoker).Assembly;
+    private static readonly string AppVersion = AppAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+        .InformationalVersion.Split('+', 2)[0] ?? AppAssembly.GetName().Version?.ToString(3) ?? "unknown";
+    public static readonly string VERSION_INFO = $"N_m3u8DL-RE {AppVersion} 20260628";
 
     [GeneratedRegex("((best|worst)\\d*|all)")]
     private static partial Regex ForStrRegex();
@@ -40,6 +44,7 @@ internal static partial class CommandInvoker
     private static readonly Option<string?> UrlProcessorArgs = new("--urlprocessor-args") { Description = ResString.cmd_urlProcessorArgs };
     private static readonly Option<string> KeyTextFile = new("--key-text-file") { Description = ResString.cmd_keyText };
     private static readonly Option<Dictionary<string, string>> Headers = new("-H", "--header") { HelpName = "header", Arity = ArgumentArity.OneOrMore, AllowMultipleArgumentsPerToken = false, Description = ResString.cmd_header, CustomParser = ParseHeaders };
+    private static readonly Option<string?> Cookies = new("--cookies") { HelpName = "FILE", Arity = ArgumentArity.ExactlyOne, Description = ResString.cmd_cookies };
     private static readonly Option<LogLevel> LogLevel = new("--log-level") { Description = ResString.cmd_logLevel, DefaultValueFactory = _ => Common.Log.LogLevel.INFO };
     private static readonly Option<SubtitleFormat> SubtitleFormat = new("--sub-format") { Description = ResString.cmd_subFormat, DefaultValueFactory = _ => Enum.SubtitleFormat.SRT };
     private static readonly Option<bool> DisableUpdateCheck = new Option<bool>("--disable-update-check") { Description = ResString.cmd_disableUpdateCheck }.WithDefault(false);
@@ -70,8 +75,13 @@ internal static partial class CommandInvoker
     private static readonly Option<bool> NoLog = new Option<bool>("--no-log") { Description = ResString.cmd_noLog }.WithDefault(false);
     private static readonly Option<bool> AllowHlsMultiExtMap = new Option<bool>("--allow-hls-multi-ext-map") { Description = ResString.cmd_allowHlsMultiExtMap }.WithDefault(false);
     private static readonly Option<string[]?> AdKeywords = new("--ad-keyword") { HelpName = "REG", Description = ResString.cmd_adKeyword };
+    private static readonly Option<bool> VodSelectParts = new("--vod-select-parts") { Description = ResString.cmd_vodSelectParts };
+    private static readonly Option<bool> VodListParts = new Option<bool>("--vod-list-parts") { Description = ResString.cmd_vodListParts }.WithDefault(false);
+    private static readonly Option<string?> VodDropParts = new("--vod-drop-parts") { HelpName = "IDS", Description = ResString.cmd_vodDropParts };
     private static readonly Option<long?> MaxSpeed = new("-R", "--max-speed") { HelpName = "SPEED", Description = ResString.cmd_maxSpeed, CustomParser = ParseSpeedLimit };
 
+
+    private static readonly Option<string?> NetworkInterface = new("--interface") { HelpName = "INTERFACE", Description = ResString.cmd_networkInterface };
 
     // 代理选项
     private static readonly Option<bool> UseSystemProxy = new Option<bool>("--use-system-proxy") { Description = ResString.cmd_useSystemProxy }.WithDefault(true);
@@ -83,11 +93,17 @@ internal static partial class CommandInvoker
 
     // morehelp
     private static readonly Option<string?> MoreHelp = new("--morehelp") { HelpName = "OPTION", Description = ResString.cmd_moreHelp };
+    private static readonly Option<string?> GenerateCompletion = new Option<string?>("--generate-completion")
+    {
+        HelpName = "SHELL", Arity = ArgumentArity.ExactlyOne,
+        Description = ResString.cmd_generateCompletion, Action = new PowerShellCompletionAction()
+    }.AcceptOnlyFromAmong("powershell");
 
     // 自定义KEY等
     private static readonly Option<EncryptMethod?> CustomHLSMethod = new("--custom-hls-method") { HelpName = "METHOD", Description = ResString.cmd_customHLSMethod };
     private static readonly Option<byte[]?> CustomHLSKey = new("--custom-hls-key") { HelpName = "FILE|HEX|BASE64", Description = ResString.cmd_customHLSKey, CustomParser = ParseHLSCustomKey };
     private static readonly Option<byte[]?> CustomHLSIv = new(name: "--custom-hls-iv") { HelpName = "FILE|HEX|BASE64", Description = ResString.cmd_customHLSIv, CustomParser = ParseHLSCustomKey };
+    private static readonly Option<CustomHlsScope> CustomHLSScope = new("--custom-hls-scope") { HelpName = "SCOPE", Description = ResString.cmd_customHLSScope, DefaultValueFactory = _ => CustomHlsScope.ALL };
     private static readonly Option<string[]?> Keys = new("--key") { Arity = ArgumentArity.OneOrMore, AllowMultipleArgumentsPerToken = false, Description = ResString.cmd_keys, CustomParser = ParseCustomKeys};
 
     // 任务开始时间
@@ -101,6 +117,7 @@ internal static partial class CommandInvoker
     private static readonly Option<bool> LivePipeMux = new Option<bool>("--live-pipe-mux") { Description = ResString.cmd_livePipeMux }.WithDefault(false);
     private static readonly Option<TimeSpan?> LiveRecordLimit = new("--live-record-limit") { HelpName = "HH:mm:ss", Description = ResString.cmd_liveRecordLimit, CustomParser = ParseLiveLimit };
     private static readonly Option<int?> LiveWaitTime = new("--live-wait-time") { HelpName = "SEC", Description = ResString.cmd_liveWaitTime };
+    private static readonly Option<int?> LiveIdleTimeout = new("--live-idle-timeout") { HelpName = "SEC", Description = ResString.cmd_liveIdleTimeout, CustomParser = ParseLiveIdleTimeout };
     private static readonly Option<int> LiveTakeCount = new("--live-take-count") { HelpName = "NUM", Description = ResString.cmd_liveTakeCount, DefaultValueFactory = _ => 16 };
     private static readonly Option<bool> LiveFixVttByAudio = new Option<bool>("--live-fix-vtt-by-audio") { Description = ResString.cmd_liveFixVttByAudio }.WithDefault(false);
 
@@ -329,6 +346,18 @@ internal static partial class CommandInvoker
             result.AddError("error in parse LiveRecordLimit: " + input);
             return null;
         }
+    }
+
+    private static int? ParseLiveIdleTimeout(ArgumentResult result)
+    {
+        var input = result.Tokens[0].Value;
+        if (int.TryParse(input, out var seconds) && seconds > 0)
+        {
+            return seconds;
+        }
+
+        result.AddError("live-idle-timeout must be a positive number of seconds: " + input);
+        return null;
     }
 
     /// <summary>
@@ -648,6 +677,7 @@ internal static partial class CommandInvoker
             DecryptionBinaryPath = result.GetValue(DecryptionBinaryPath),
             FFmpegBinaryPath = result.GetValue(FFmpegBinaryPath),
             KeyTextFile = result.GetValue(KeyTextFile),
+            Cookies = result.GetValue(Cookies),
             DownloadRetryCount = result.GetValue(DownloadRetryCount),
             HttpRequestTimeout = result.GetValue(HttpRequestTimeout),
             BaseUrl = result.GetValue(BaseUrl),
@@ -668,19 +698,26 @@ internal static partial class CommandInvoker
             LiveFixVttByAudio = result.GetValue(LiveFixVttByAudio),
             UseSystemProxy = result.GetValue(UseSystemProxy),
             CustomProxy = result.GetValue(CustomProxy),
+            NetworkInterface = result.GetValue(NetworkInterface),
             CustomRange = result.GetValue(CustomRange),
             LiveWaitTime = result.GetValue(LiveWaitTime),
+            LiveIdleTimeout = result.GetValue(LiveIdleTimeout),
             LiveTakeCount = result.GetValue(LiveTakeCount),
             NoDateInfo = result.GetValue(NoDateInfo),
             NoLog = result.GetValue(NoLog),
             AllowHlsMultiExtMap = result.GetValue(AllowHlsMultiExtMap),
             AdKeywords = result.GetValue(AdKeywords),
+            // 未传参数保留自动判断，显式 false 则关闭选段交互。
+            VodSelectParts = result.HasOption(VodSelectParts) ? result.GetValue(VodSelectParts) : null,
+            VodListParts = result.GetValue(VodListParts),
+            VodDropParts = result.GetValue(VodDropParts),
             MaxSpeed = result.GetValue(MaxSpeed),
         };
 
         if (result.HasOption(CustomHLSMethod)) option.CustomHLSMethod = result.GetValue(CustomHLSMethod);
         if (result.HasOption(CustomHLSKey)) option.CustomHLSKey = result.GetValue(CustomHLSKey);
         if (result.HasOption(CustomHLSIv)) option.CustomHLSIv = result.GetValue(CustomHLSIv);
+        option.CustomHLSScope = result.GetValue(CustomHLSScope);
 
         var parsedHeaders = result.GetValue(Headers);
         if (parsedHeaders != null)
@@ -730,14 +767,14 @@ internal static partial class CommandInvoker
         var rootCommand = new RootCommand(VERSION_INFO)
         {
             Input, TmpDir, SaveDir, SaveName, SavePattern, LogFilePath, BaseUrl, ThreadCount, DownloadRetryCount, HttpRequestTimeout, ForceAnsiConsole, NoAnsiColor,AutoSelect, SkipMerge, SkipDownload, CheckSegmentsCount,
-            BinaryMerge, UseFFmpegConcatDemuxer, DelAfterDone, NoDateInfo, NoLog, WriteMetaJson, AppendUrlParams, ConcurrentDownload, Headers, SubOnly, SubtitleFormat, AutoSubtitleFix,
+            BinaryMerge, UseFFmpegConcatDemuxer, DelAfterDone, NoDateInfo, NoLog, WriteMetaJson, AppendUrlParams, ConcurrentDownload, Headers, Cookies, SubOnly, SubtitleFormat, AutoSubtitleFix,
             FFmpegBinaryPath,
             LogLevel, UILanguage, UrlProcessorArgs, Keys, KeyTextFile, DecryptionEngine, DecryptionBinaryPath, UseShakaPackager, MP4RealTimeDecryption,
             MaxSpeed,
             MuxAfterDone,
-            CustomHLSMethod, CustomHLSKey, CustomHLSIv, UseSystemProxy, CustomProxy, CustomRange, TaskStartAt,
-            LivePerformAsVod, LiveRealTimeMerge, LiveKeepSegments, LivePipeMux, LiveFixVttByAudio, LiveRecordLimit, LiveWaitTime, LiveTakeCount,
-            MuxImports, VideoFilter, AudioFilter, SubtitleFilter, DropVideoFilter, DropAudioFilter, DropSubtitleFilter, AdKeywords, DisableUpdateCheck, AllowHlsMultiExtMap, MoreHelp
+            CustomHLSMethod, CustomHLSKey, CustomHLSIv, CustomHLSScope, UseSystemProxy, CustomProxy, NetworkInterface, CustomRange, TaskStartAt,
+            LivePerformAsVod, LiveRealTimeMerge, LiveKeepSegments, LivePipeMux, LiveFixVttByAudio, LiveRecordLimit, LiveWaitTime, LiveIdleTimeout, LiveTakeCount,
+            MuxImports, VideoFilter, AudioFilter, SubtitleFilter, DropVideoFilter, DropAudioFilter, DropSubtitleFilter, AdKeywords, VodSelectParts, VodListParts, VodDropParts, DisableUpdateCheck, AllowHlsMultiExtMap, MoreHelp, GenerateCompletion
         };
 
         rootCommand.TreatUnmatchedTokensAsErrors = true;

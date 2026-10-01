@@ -168,9 +168,9 @@ internal static class StaticText
         ),
         ["cmd_allowHlsMultiExtMap"] = new TextContainer
         (
-            zhCN: "允许HLS中的多个#EXT-X-MAP(实验性)",
-            zhTW: "允許HLS中的多個#EXT-X-MAP(實驗性)",
-            enUS: "Allow multiple #EXT-X-MAP in HLS (experimental)"
+            zhCN: "允许直播HLS中的多个#EXT-X-MAP(实验性；点播默认支持)",
+            zhTW: "允許直播HLS中的多個#EXT-X-MAP(實驗性；點播預設支援)",
+            enUS: "Allow multiple #EXT-X-MAP in live HLS (experimental; enabled for VOD)"
         ),
         ["cmd_appendUrlParams"] = new TextContainer
         (
@@ -255,6 +255,24 @@ internal static class StaticText
             zhCN: "为HTTP请求设置特定的请求头, 例如:\r\n-H \"Cookie: mycookie\" -H \"User-Agent: iOS\"",
             zhTW: "為HTTP請求設置特定的請求頭, 例如:\r\n-H \"Cookie: mycookie\" -H \"User-Agent: iOS\"",
             enUS: "Pass custom header(s) to server, Example:\r\n-H \"Cookie: mycookie\" -H \"User-Agent: iOS\""
+        ),
+        ["cmd_cookies"] = new TextContainer
+        (
+            zhCN: "读取 Netscape 格式的 Cookie 文件；手动设置的 Cookie 请求头优先",
+            zhTW: "讀取 Netscape 格式的 Cookie 檔案；手動設定的 Cookie 請求標頭優先",
+            enUS: "Load cookies from a Netscape cookie file; a custom Cookie header takes precedence"
+        ),
+        ["cookiesFileReadFailed"] = new TextContainer
+        (
+            zhCN: "无法读取 Cookie 文件",
+            zhTW: "無法讀取 Cookie 檔案",
+            enUS: "Unable to read cookie file"
+        ),
+        ["cookiesFileInvalidLine"] = new TextContainer
+        (
+            zhCN: "Cookie 文件第 {0} 行格式无效（需要 Netscape 格式）",
+            zhTW: "Cookie 檔案第 {0} 行格式無效（需要 Netscape 格式）",
+            enUS: "Invalid cookie file format at line {0} (Netscape format required)"
         ),
         ["cmd_Input"] = new TextContainer
         (
@@ -382,6 +400,18 @@ internal static class StaticText
             zhTW: "查看某個選項的詳細幫助訊息",
             enUS: "Set more help info about one option"
         ),
+        ["cmd_generateCompletion"] = new TextContainer
+        (
+            zhCN: "输出内嵌的补全脚本（powershell）",
+            zhTW: "輸出內嵌的補全腳本（powershell）",
+            enUS: "Print the embedded completion script (powershell)"
+        ),
+        ["completionShellInvalid"] = new TextContainer
+        (
+            zhCN: "--generate-completion 需要指定支持的 Shell: powershell",
+            zhTW: "--generate-completion 需要指定支援的 Shell: powershell",
+            enUS: "--generate-completion requires a supported shell: powershell"
+        ),
         ["cmd_urlProcessorArgs"] = new TextContainer
         (
             zhCN: "此字符串将直接传递给URL Processor",
@@ -393,6 +423,36 @@ internal static class StaticText
             zhCN: "录制直播时实时合并",
             zhTW: "錄製直播時即時合併",
             enUS: "Real-time merge into file when recording live"
+        ),
+        ["cmd_networkInterface"] = new TextContainer
+        (
+            zhCN: "指定请求使用的网卡名或本机 IP，如 eth1 或 192.168.1.10",
+            zhTW: "指定請求使用的網卡名稱或本機 IP，如 eth1 或 192.168.1.10",
+            enUS: "Use the specified network interface or local IP address, e.g. eth1 or 192.168.1.10"
+        ),
+        ["networkInterfaceInvalid"] = new TextContainer
+        (
+            zhCN: "找不到可用的网络接口或本机 IP 地址: {0}",
+            zhTW: "找不到可用的網路介面或本機 IP 位址: {0}",
+            enUS: "No usable network interface or local IP address found: {0}"
+        ),
+        ["networkInterfaceUnsupported"] = new TextContainer
+        (
+            zhCN: "当前系统不支持按网卡名绑定，请指定本机 IP 地址",
+            zhTW: "目前系統不支援依網卡名稱綁定，請指定本機 IP 位址",
+            enUS: "Binding by interface name is unsupported on this system; specify a local IP address"
+        ),
+        ["networkInterfaceBindFailed"] = new TextContainer
+        (
+            zhCN: "无法绑定网络接口或本机 IP 地址 {0}: {1}",
+            zhTW: "無法綁定網路介面或本機 IP 位址 {0}: {1}",
+            enUS: "Cannot bind network interface or local IP address {0}: {1}"
+        ),
+        ["networkInterfaceConnectFailed"] = new TextContainer
+        (
+            zhCN: "无法通过指定网络接口或本机 IP 地址 {0} 连接到 {1}",
+            zhTW: "無法透過指定網路介面或本機 IP 位址 {0} 連線至 {1}",
+            enUS: "Cannot connect to {1} using network interface or local IP address {0}"
         ),
         ["cmd_customProxy"] = new TextContainer
         (
@@ -424,11 +484,190 @@ internal static class StaticText
             zhTW: "手動設置直播列表刷新間隔",
             enUS: "Manually set the live playlist refresh interval"
         ),
+        ["cmd_liveIdleTimeout"] = new TextContainer
+        (
+            zhCN: "直播列表连续指定秒数无新分片时停止录制（默认关闭）",
+            zhTW: "直播列表連續指定秒數無新分片時停止錄製（預設關閉）",
+            enUS: "Stop recording when a live playlist has no new segments for this many seconds (disabled by default)"
+        ),
         ["cmd_adKeyword"] = new TextContainer
         (
             zhCN: "设置广告分片的URL关键字(正则表达式)",
             zhTW: "設置廣告分片的URL關鍵字(正則表達式)",
             enUS: "Set URL keywords (regular expressions) for AD segments"
+        ),
+        ["vodPartsConcat"] = new TextContainer
+        (
+            zhCN: "正在拼接 {0} 个独立初始化的点播段...",
+            zhTW: "正在拼接 {0} 個獨立初始化的點播段...",
+            enUS: "Concatenating {0} independently initialized VOD sections..."
+        ),
+        ["vodPeriodsPlanned"] = new TextContainer
+        (
+            zhCN: "点播：已为 {1} 规划 {0} 个 Period",
+            zhTW: "點播：已為 {1} 規劃 {0} 個 Period",
+            enUS: "VOD: {0} Periods for {1}"
+        ),
+        ["vodPeriodNoMatch"] = new TextContainer
+        (
+            zhCN: "Period {0}：没有找到与 {1} 匹配的媒体流。",
+            zhTW: "Period {0}：沒有找到與 {1} 匹配的媒體流。",
+            enUS: "Period {0}: no matching representation for {1}."
+        ),
+        ["vodPeriodIncompatible"] = new TextContainer
+        (
+            zhCN: "Period {0}：与 {1} 的编码或声道配置不兼容。请用 --vod-select-parts 选择要保留的配置，或用 --vod-drop-parts 排除不需要的段。",
+            zhTW: "Period {0}：與 {1} 的編碼或聲道配置不相容。請用 --vod-select-parts 選擇要保留的配置，或用 --vod-drop-parts 排除不需要的段。",
+            enUS: "Period {0}: incompatible codec/channel configuration for {1}. Use --vod-select-parts to keep desired configurations, or --vod-drop-parts to exclude unwanted sections."
+        ),
+        ["vodPartsIncompatible"] = new TextContainer
+        (
+            zhCN: "点播段的编码、采样率或声道配置不兼容，已保留各段输出文件。请用 --vod-select-parts 选择要保留的配置，或用 --vod-drop-parts 排除不需要的段。",
+            zhTW: "點播段的編碼、取樣率或聲道配置不相容，已保留各段輸出檔案。請用 --vod-select-parts 選擇要保留的配置，或用 --vod-drop-parts 排除不需要的段。",
+            enUS: "VOD sections have incompatible codec/sample-rate/channel configurations; separate outputs are preserved. Use --vod-select-parts to keep desired configurations, or --vod-drop-parts to exclude unwanted sections."
+        ),
+        ["vodPartStillEncrypted"] = new TextContainer
+        (
+            zhCN: "点播段仍含加密媒体，已停止拼接并保留下载文件。请提供完整的解密密钥后重试。",
+            zhTW: "點播段仍含加密媒體，已停止拼接並保留下載檔案。請提供完整的解密金鑰後重試。",
+            enUS: "A VOD section still contains encrypted media. Concatenation stopped and downloaded files are preserved. Retry with all required decryption keys."
+        ),
+        ["webmInvalid"] = new TextContainer
+        (
+            zhCN: "WebM 元素格式无效。",
+            zhTW: "WebM 元素格式無效。",
+            enUS: "Invalid WebM element."
+        ),
+        ["vodMediaOutsidePeriod"] = new TextContainer
+        (
+            zhCN: "Period {0}：媒体超出该段的播放时间范围。",
+            zhTW: "Period {0}：媒體超出該段的播放時間範圍。",
+            enUS: "Period {0}: media lies outside its presentation interval."
+        ),
+        ["vodDropPartsInvalid"] = new TextContainer
+        (
+            zhCN: "--vod-drop-parts 编号格式无效，请使用 0,2-4 这样的格式。",
+            zhTW: "--vod-drop-parts 編號格式無效，請使用 0,2-4 這樣的格式。",
+            enUS: "Invalid --vod-drop-parts: use IDs such as 0,2-4."
+        ),
+        ["vodDropPartsRangeInvalid"] = new TextContainer
+        (
+            zhCN: "--vod-drop-parts 编号范围无效。",
+            zhTW: "--vod-drop-parts 編號範圍無效。",
+            enUS: "Invalid --vod-drop-parts range."
+        ),
+        ["vodPartIdsUnknown"] = new TextContainer
+        (
+            zhCN: "不存在的点播段编号：{0}。请用 --vod-list-parts 查看编号。",
+            zhTW: "不存在的點播段編號：{0}。請用 --vod-list-parts 查看編號。",
+            enUS: "Unknown VOD part IDs: {0}. Use --vod-list-parts."
+        ),
+        ["vodSelectAtLeastOne"] = new TextContainer
+        (
+            zhCN: "请至少选择一组要保留的点播配置。",
+            zhTW: "請至少選擇一組要保留的點播配置。",
+            enUS: "Select at least one VOD configuration."
+        ),
+        ["vodPartsRequireVod"] = new TextContainer
+        (
+            zhCN: "点播选段选项仅适用于点播清单。",
+            zhTW: "點播選段選項僅適用於點播清單。",
+            enUS: "VOD part selection options require a VOD playlist."
+        ),
+        ["vodPartsRequireInteractive"] = new TextContainer
+        (
+            zhCN: "--vod-select-parts 需要可交互的终端。脚本请使用 --vod-drop-parts。",
+            zhTW: "--vod-select-parts 需要可互動的終端。指令碼請使用 --vod-drop-parts。",
+            enUS: "--vod-select-parts requires an interactive terminal. Use --vod-drop-parts for scripts."
+        ),
+        ["hlsMediaOriginReadFailed"] = new TextContainer
+        (
+            zhCN: "无法读取 HLS 媒体的时间戳起点。",
+            zhTW: "無法讀取 HLS 媒體的時間戳起點。",
+            enUS: "Cannot read HLS media timestamp origin."
+        ),
+        ["hlsSubtitleOriginMissing"] = new TextContainer
+        (
+            zhCN: "无法确定字幕同步所需的 HLS 媒体时间戳起点。",
+            zhTW: "無法確定字幕同步所需的 HLS 媒體時間戳起點。",
+            enUS: "Cannot determine the HLS media timestamp origin for subtitles."
+        ),
+        ["hlsTimestampMapInvalid"] = new TextContainer
+        (
+            zhCN: "HLS X-TIMESTAMP-MAP 格式无效。",
+            zhTW: "HLS X-TIMESTAMP-MAP 格式無效。",
+            enUS: "Invalid HLS X-TIMESTAMP-MAP."
+        ),
+        ["hlsByteRangeMissingPrevious"] = new TextContainer
+        (
+            zhCN: "HLS BYTERANGE 省略偏移时，必须存在前一个字节范围。",
+            zhTW: "HLS BYTERANGE 省略偏移時，必須存在前一個位元組範圍。",
+            enUS: "Implicit HLS BYTERANGE requires a preceding byte range."
+        ),
+        ["mediaPartInputMismatch"] = new TextContainer
+        (
+            zhCN: "每个媒体段必须对应一个输入文件。",
+            zhTW: "每個媒體段必須對應一個輸入檔案。",
+            enUS: "Each media part must have one input file."
+        ),
+        ["concatInputPathInvalid"] = new TextContainer
+        (
+            zhCN: "拼接输入文件的路径无效。",
+            zhTW: "拼接輸入檔案的路徑無效。",
+            enUS: "Invalid concat input path."
+        ),
+        ["tfdtVersionUnsupported"] = new TextContainer
+        (
+            zhCN: "TFDT 版本只能为 0 或 1。",
+            zhTW: "TFDT 版本只能為 0 或 1。",
+            enUS: "TFDT version can only be 0 or 1."
+        ),
+        ["vodPartIdsLabel"] = new TextContainer
+        (
+            zhCN: "编号",
+            zhTW: "編號",
+            enUS: "IDs"
+        ),
+        ["downloadCancelled"] = new TextContainer
+        (
+            zhCN: "已取消下载。",
+            zhTW: "已取消下載。",
+            enUS: "Download cancelled."
+        ),
+        ["cmd_vodSelectParts"] = new TextContainer
+        (
+            zhCN: "控制点播选段交互：不传则自动判断，true 强制显示，false 关闭（空格勾选，回车确认）",
+            zhTW: "控制點播選段互動：未指定則自動判斷，true 強制顯示，false 關閉（空格勾選，確認鍵完成）",
+            enUS: "Control VOD section selection: omitted = automatic, true = always prompt, false = disable (Space/Enter)"
+        ),
+        ["vodReadingConfigs"] = new TextContainer(zhCN: "正在识别点播媒体配置…", zhTW: "正在識別點播媒體配置…", enUS: "Inspecting VOD media configurations…"),
+        ["vodPromptTitle"] = new TextContainer
+        (
+            zhCN: "请选择[green]要保留的点播段[/]（按配置和时长归组，默认全部保留）：",
+            zhTW: "請選擇[green]要保留的點播段[/]（按配置和時長歸組，預設全部保留）：",
+            enUS: "Select [green]VOD sections to keep[/] (grouped by configuration and duration; all kept by default):"
+        ),
+        ["vodPromptInfo"] = new TextContainer
+        (
+            zhCN: "(按 [blue]空格键[/] 勾选/取消，按 [green]回车键[/] 确认；音视频和字幕同步处理)",
+            zhTW: "(按 [blue]空格鍵[/] 勾選/取消，按 [green]確認鍵[/] 完成；音訊視訊和字幕同步處理)",
+            enUS: "(Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept; audio/video/subtitles stay together)"
+        ),
+        ["vodSectionDuration"] = new TextContainer(zhCN: "每段 {0} 秒", zhTW: "每段 {0} 秒", enUS: "{0} s per section"),
+        ["vodPartCount"] = new TextContainer(zhCN: "{0} 段", zhTW: "{0} 段", enUS: "{0} sections"),
+        ["vodAvailableConfigs"] = new TextContainer(zhCN: "{0} 种可选配置", zhTW: "{0} 種可選配置", enUS: "{0} available configurations"),
+        ["vodConfigUnknown"] = new TextContainer(zhCN: "配置未验证", zhTW: "配置未驗證", enUS: "unverified configuration"),
+        ["cmd_vodListParts"] = new TextContainer
+        (
+            zhCN: "按媒体配置归组列出点播段的编号和总时长后退出",
+            zhTW: "按媒體配置歸組列出點播段的編號和總時長後退出",
+            enUS: "List VOD sections grouped by media configuration, with IDs and total durations, then exit"
+        ),
+        ["cmd_vodDropParts"] = new TextContainer
+        (
+            zhCN: "按 --vod-list-parts 的编号删除整个点播段及对应音频/字幕，例如 0,2-4",
+            zhTW: "按 --vod-list-parts 的編號刪除整個點播段及對應音訊/字幕，例如 0,2-4",
+            enUS: "Drop VOD sections and matching audio/subtitles by --vod-list-parts IDs, e.g. 0,2-4"
         ),
         ["cmd_liveTakeCount"] = new TextContainer
         (
@@ -453,6 +692,12 @@ internal static class StaticText
             zhCN: "指定HLS解密IV. 可以是文件, HEX或Base64",
             zhTW: "指定HLS解密IV. 可以是文件, HEX或Base64",
             enUS: "Set the HLS decryption iv. Can be file, HEX or Base64"
+        ),
+        ["cmd_customHLSScope"] = new TextContainer
+        (
+            zhCN: "指定自定义HLS加密方式、KEY和IV的适用范围 (ALL|VIDEO|AUDIO)",
+            zhTW: "指定自訂HLS加密方式、KEY和IV的適用範圍 (ALL|VIDEO|AUDIO)",
+            enUS: "Apply custom HLS method, key and IV to selected media type (ALL|VIDEO|AUDIO)"
         ),
         ["cmd_livePipeMux"] = new TextContainer
         (
@@ -840,6 +1085,12 @@ internal static class StaticText
             zhCN: "直播已结束，即将停止录制",
             zhTW: "直播已結束，即將停止錄製",
             enUS: "Live stream ended, will stop recording soon"
+        ),
+        ["liveIdleTimeoutReached"] = new TextContainer
+        (
+            zhCN: "连续 {0} 秒没有新分片，即将停止录制",
+            zhTW: "連續 {0} 秒沒有新分片，即將停止錄製",
+            enUS: "No new segments for {0} seconds, stopping live recording"
         ),
         ["saveName"] = new TextContainer
         (
