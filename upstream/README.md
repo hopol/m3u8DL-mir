@@ -46,7 +46,41 @@ N_m3u8DL-RE "https://example.com/video.m3u8" --cookies "cookies.txt"
 
 Cookie 会按请求的域名、路径、HTTPS 条件及有效期匹配，适用于清单、密钥、初始化文件和分片，支持点播及直播。若同时设置 `-H "Cookie: ..."`，则以手动请求头为准。服务器更新的 Cookie 仅保存在内存中，不回写文件。
 
+## 配置文件
+
+常用选项可以保存到 UTF-8 文本配置文件中，程序启动时自动读取：
+
+- Linux / macOS：`~/.config/N_m3u8DL-RE/config.conf`；若设置了绝对路径的 `XDG_CONFIG_HOME`，则使用 `$XDG_CONFIG_HOME/N_m3u8DL-RE/config.conf`。
+- Windows：`%APPDATA%\N_m3u8DL-RE\config.conf`。
+
+程序不会自动创建配置文件，默认文件不存在时使用内置默认值。配置沿用命令行参数语法，支持以 `#` 开头的注释行；包含空格的参数值使用双引号：
+
+```text
+# 常用下载选项
+-mt
+--no-log
+--auto-select
+--thread-count 16
+--save-dir "Downloads/My Videos"
+```
+
+优先级为 **命令行 > 配置文件 > 内置默认值**。同一选项按短名和长名识别，单值选项由命令行替换配置值，被替换的值不再进行下载参数转换或文件读取。`--key`、`--ad-keyword`、`--mux-import` 等可重复选项按配置在前、命令行在后的顺序合并。`-H` / `--header` 按请求头名称合并，名称不区分大小写；不同名称保留，同名以命令行为准。布尔选项可用 `false` 关闭，例如 `--no-log false`。配置中的 HTTP 超时也视为手动指定，会关闭直播的自动超时调整。
+
+```text
+N_m3u8DL-RE "https://example.com/video.m3u8" --thread-count 8
+N_m3u8DL-RE "https://example.com/video.m3u8" --config "custom.conf"
+N_m3u8DL-RE "https://example.com/video.m3u8" --no-config
+```
+
+`--config FILE` 只读取指定文件，替代默认配置；文件不存在或内容无效时报错。`--no-config` 不读取配置文件，不能与 `--config` 同时使用。配置只允许保存下载选项，不允许保存下载地址、配置加载选项或帮助、版本、补全操作。相对路径按当前工作目录解析，程序目录和当前目录不会被自动搜索。
+
+帮助信息会使用配置中的 UI 语言；生成补全脚本及 Tab 补全请求不读取配置。原有 `@args.txt` 参数文件仍可使用，其中的参数具有命令行优先级。
+
+Docker 部署建议将配置只读挂载到 `/config/config.conf`，并传入 `--config /config/config.conf`，不依赖容器的 HOME 或运行用户。
+
 ## 命令行参数
+
+过长的自动保存名、自定义保存名和模板生成的文件名会自动缩短，并附加短哈希以减少重名。长度按 UTF-8 字节计算，不会截断中文或 emoji；自动名称的时间戳和输出文件的媒体扩展名会预留空间。
 
 ```
 Description:
@@ -59,19 +93,17 @@ Arguments:
   <input>  链接或文件
 
 Options:
+  --config <FILE>                                         读取指定配置文件，替代用户默认配置；命令行选项优先
+  --no-config                                             不读取配置文件，不能与 --config 同时使用
   --tmp-dir <tmp-dir>                                     设置临时文件存储目录
   --save-dir <save-dir>                                   设置输出目录
   --save-name <save-name>                                 设置保存文件名
-  --save-pattern <save-pattern>                           设置保存文件命名模板, 支持使用变量: 
-                                                          <SaveName>, <Id>, <Codecs>, <Language>, <Resolution>, 
-                                                          <Bandwidth>, <MediaType>, <Channels>, <FrameRate>, 
-                                                          <VideoRange>, <GroupId>, <Ext>
-                                                          示例: --save-pattern "<SaveName>_<Resolution>_<Bandwidth>"
+  --save-pattern <save-pattern>                           设置保存文件命名模板. 输入 "--morehelp save-pattern" 以查看变量和示例
   --log-file-path <log-file-path>                         设置日志文件路径, 例如 C:\Logs\log.txt
   --base-url <base-url>                                   设置BaseURL
   --thread-count <number>                                 设置下载线程数 [default: 本机CPU线程数]
-  --download-retry-count <number>                         每个分片下载异常时的重试次数 [default: 3]
-  --http-request-timeout <seconds>                        HTTP请求的超时时间(秒) [default: 100]
+  --download-retry-count <number>                         每个分片下载异常时的重试次数；分片直播临时网络故障在重试耗尽后仍会等待恢复 [default: 3]
+  --http-request-timeout <seconds>                        HTTP请求超时(秒)；分片直播未指定时自动调整，指定后也用于分片连续无数据超时，不限制总下载时长 [default: 100]
   --force-ansi-console                                    强制认定终端为支持ANSI且可交互的终端
   --no-ansi-color                                         去除ANSI颜色
   --auto-select                                           自动选择所有类型的最佳轨道 [default: False]
@@ -84,11 +116,11 @@ Options:
   --no-date-info                                          混流时不写入日期信息 [default: False]
   --no-log                                                关闭日志文件输出 [default: False]
   --write-meta-json                                       解析后的信息是否输出json文件 [default: True]
-  --append-url-params                                     将输入Url的Params添加至分片, 对某些网站很有用, 例如 kakao.com [default: False]
+  --append-url-params                                     将输入URL的查询参数添加至分片；本地清单使用 --base-url 的参数 [default: False]
   -mt, --concurrent-download                              并发下载已选择的音频、视频和字幕 [default: False]
   -H, --header <header>                                   为HTTP请求设置特定的请求头, 例如:
                                                           -H "Cookie: mycookie" -H "User-Agent: iOS"
-  --cookies <FILE>                                       读取 Netscape 格式的 Cookie 文件；手动 Cookie 请求头优先
+  --cookies <FILE>                                        读取 Netscape 格式的 Cookie 文件；手动设置的 Cookie 请求头优先
   --sub-only                                              只选取字幕轨道 [default: False]
   --sub-format <SRT|VTT>                                  字幕输出类型 [default: SRT]
   --auto-subtitle-fix                                     自动修正字幕 [default: True]
@@ -111,7 +143,7 @@ Options:
   --custom-hls-scope <SCOPE>                              指定自定义HLS加密方式、KEY和IV的适用范围 (ALL|VIDEO|AUDIO) [default: ALL]
   --use-system-proxy                                      使用系统默认代理 [default: True]
   --custom-proxy <URL>                                    设置请求代理, 如 http://127.0.0.1:8888
-  --interface <INTERFACE>                                 指定请求使用的网卡名或本机 IP
+  --interface <INTERFACE>                                 指定请求使用的网卡名或本机 IP，如 eth1 或 192.168.1.10
   --custom-range <RANGE>                                  仅下载部分分片. 输入 "--morehelp custom-range" 以查看详细信息
   --task-start-at <yyyyMMddHHmmss>                        在此时间之前不会开始执行任务
   --live-perform-as-vod                                   以点播方式下载直播流 [default: False]
@@ -127,13 +159,13 @@ Options:
   -sv, --select-video <OPTIONS>                           通过正则表达式选择符合要求的视频流. 输入 "--morehelp select-video" 以查看详细信息
   -sa, --select-audio <OPTIONS>                           通过正则表达式选择符合要求的音频流. 输入 "--morehelp select-audio" 以查看详细信息
   -ss, --select-subtitle <OPTIONS>                        通过正则表达式选择符合要求的字幕流. 输入 "--morehelp select-subtitle" 以查看详细信息
-  -dv, --drop-video <OPTIONS>                             通过正则表达式去除符合要求的视频流.
-  -da, --drop-audio <OPTIONS>                             通过正则表达式去除符合要求的音频流.
-  -ds, --drop-subtitle <OPTIONS>                          通过正则表达式去除符合要求的字幕流.
+  -dv, --drop-video <OPTIONS>                             通过正则表达式去除符合要求的视频流. 支持与 --select-video 相同的参数, 输入 "--morehelp select-video" 以查看详细信息
+  -da, --drop-audio <OPTIONS>                             通过正则表达式去除符合要求的音频流. 支持与 --select-video 相同的参数, 输入 "--morehelp select-video" 以查看详细信息
+  -ds, --drop-subtitle <OPTIONS>                          通过正则表达式去除符合要求的字幕流. 支持与 --select-video 相同的参数, 输入 "--morehelp select-video" 以查看详细信息
   --ad-keyword <REG>                                      设置广告分片的URL关键字(正则表达式)
-  --vod-select-parts                                      点播选段交互：不传自动判断，true 强制显示，false 关闭
-  --vod-list-parts                                        按媒体配置归组列出点播段编号及总时长后退出
-  --vod-drop-parts <IDS>                                  删除整个点播段及对应音频/字幕，例如 0,2-4
+  --vod-select-parts                                      控制点播选段交互：不传则自动判断，true 强制显示，false 关闭（空格勾选，回车确认）
+  --vod-list-parts                                        按媒体配置归组列出点播段的编号和总时长后退出 [default: False]
+  --vod-drop-parts <IDS>                                  按 --vod-list-parts 的编号删除整个点播段及对应音频/字幕，例如 0,2-4
   --disable-update-check                                  禁用版本更新检测 [default: False]
   --allow-hls-multi-ext-map                               允许直播HLS中的多个#EXT-X-MAP(实验性；点播默认支持) [default: False]
   --morehelp <OPTION>                                     查看某个选项的详细帮助信息
@@ -160,7 +192,7 @@ More Help:
 
 所有工作完成时尝试混流分离的音视频. 你能够以:分隔形式指定如下参数:
 
-* format=FORMAT: 指定混流容器 mkv, mp4
+* format=FORMAT: 指定混流容器 mkv, mp4, ts
 * muxer=MUXER: 指定混流程序 ffmpeg, mkvmerge (默认: ffmpeg)
 * bin_path=PATH: 指定程序路径 (默认: 自动寻找)
 * skip_sub=BOOL: 是否忽略字幕文件 (默认: false)
@@ -198,12 +230,26 @@ More Help:
 
   --select-video
 
-通过正则表达式选择符合要求的视频流. 你能够以:分隔形式指定如下参数:
+通过正则表达式选择符合要求的视频流. 你能够以:分隔形式指定如下参数.
+同样的参数也适用于 --select-audio/-sa, --select-subtitle/-ss 以及对应的 --drop-video/--drop-audio/--drop-subtitle 选项.
 
-id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX
-segsMin=number:segsMax=number:ch=REGEX:range=REGEX:url=REGEX
-plistDurMin=hms:plistDurMax=hms:for=FOR
-
+* id=REGEX: 按 GroupId 匹配
+* lang=REGEX: 按语言代码匹配
+* name=REGEX: 按名称匹配
+* codecs=REGEX: 按编码匹配 (如 hvc1, avc1, mp4a)
+* res=REGEX: 按分辨率匹配 (如 1920*, 3840*)
+* frame=REGEX: 按帧率匹配
+* channel=REGEX: 按音频声道数匹配 (如 6, 2)
+* range=REGEX: 按视频动态范围匹配 (如 SDR, HDR, PQ)
+* url=REGEX: 按分片URL匹配
+* period=REGEX: 按 DASH Period id 匹配 (多Period MPD, 如广告/分段)
+* segsMin=number: 仅保留分片数 >= number 的流
+* segsMax=number: 仅保留分片数 <= number 的流
+* plistDurMin=hms: 仅保留时长 >= hms 的流 (如 1h20m30s, 90s)
+* plistDurMax=hms: 仅保留时长 <= hms 的流
+* bwMin=int: 仅保留码率 >= int Kbps 的流
+* bwMax=int: 仅保留码率 <= int Kbps 的流
+* role=string: 按 DASH role 匹配 (Subtitle, Main, Alternate, Supplementary, Commentary, Dub, Description, Sign, Metadata, ForcedSubtitle)
 * for=FOR: 选择方式. best[number], worst[number], all (默认: best)
 
 例如:
@@ -213,6 +259,15 @@ plistDurMin=hms:plistDurMax=hms:for=FOR
 -sv res="3840*":codecs=hvc1:for=best
 # 选择长度大于1小时20分钟30秒的视频
 -sv plistDurMin="1h20m30s":for=best
+-sv role="main":for=best
+# 选择码率在800Kbps至1Mbps之间的视频
+-sv bwMin=800:bwMax=1000
+# 去除分片数不超过2的字幕流 (如 trick-play/广告列表)
+-ds segsMax=2:for=all --auto-select
+# 仅保留主内容 Period (排除广告 Period)
+-sv period="main":for=best
+# 去除广告 Period 的视频
+-dv period="ad":for=all
 ```
 
 ```
@@ -229,6 +284,7 @@ More Help:
 -sa lang=en:for=best
 # 选择最佳的2条英语(或日语)音轨
 -sa lang="ja|en":for=best2
+-sa role="main":for=best
 ```
 
 ```
@@ -252,6 +308,9 @@ More Help:
 
 下载点播内容时, 仅下载部分分片.
 
+时间格式为 MM:SS 或 HH:MM:SS，省略起点表示从头开始，省略终点表示下载到末尾.
+时间范围按分片起始时间筛选（包含起止边界），保留完整分片，不进行精确裁切.
+
 例如:
 # 下载[0,10]共11个分片
 --custom-range 0-10
@@ -261,49 +320,42 @@ More Help:
 --custom-range -99
 # 下载第5分钟到20分钟的内容
 --custom-range 05:00-20:00
+# 跳过前26秒，下载后续内容
+--custom-range 00:26-
+# 仅下载前26秒的内容（可能包含跨越26秒边界的完整分片）
+--custom-range -00:26
 ```
+
 ```
 More Help:
 
   --save-pattern
 
-使用变量设置输出文件命名模板. 支持的变量:
+使用变量设置各轨道的输出文件名主体，程序自动追加输出扩展名.
 
-* <SaveName>: 用户指定的保存名称 (--save-name)
-* <Id>: 流的任务ID
-* <Codecs>: 编解码器信息 (例如: avc1.64001f, mp4a.40.2)
-* <Language>: 语言代码 (例如: en, zh-CN)
-* <Resolution>: 视频分辨率 (例如: 1920x1080)
-* <Bandwidth>: 流的带宽/比特率
+* <SaveName>: --save-name 指定的保存名称，未指定时为空
+* <Id>: 轨道下载任务ID
+* <Codecs>: 编码信息 (如 avc1.64001f, mp4a.40.2)
+* <Language>: 语言代码 (如 en, zh-CN)
+* <Resolution>: 视频分辨率 (如 1920x1080)
+* <Bandwidth>: 码率数值，单位 bit/s (如 5000000)
 * <MediaType>: 媒体类型 (VIDEO, AUDIO, SUBTITLES)
-* <Channels>: 音频声道配置
-* <FrameRate>: 帧率
-* <VideoRange>: 视频色域/HDR信息 (SDR, HDR10等)
+* <Channels>: 音频声道信息
+* <FrameRate>: 视频帧率
+* <VideoRange>: 视频动态范围 (如 SDR, HDR10)
 * <GroupId>: 流组标识符
 
-使用场景:
-当下载多个相同类型的流时(例如多个不同分辨率的视频)，使用此选项可以避免文件名冲突。
+变量区分大小写，缺失的信息替换为空字符串. 模板不需要包含扩展名.
 
 例如:
-# 下载1080p和720p视频，文件名包含分辨率
---save-pattern "<SaveName>_<Resolution>" --save-name "video"
-# 输出: video_1920x1080.mp4, video_1280x720.mp4
-
-# 包含带宽信息
---save-pattern "<SaveName>_<Resolution>_<Bandwidth>kbps"
-# 输出: video_1920x1080_5000000kbps.mp4
-
-# 下载多个音频流，包含语言和声道
---save-pattern "<SaveName>_<Language>_<Channels>ch"
-# 输出: audio_en_2ch.m4a, audio_es_2ch.m4a, audio_en_6ch.m4a
-
-# 复杂模板
---save-pattern "<MediaType>_<Resolution>_<Codecs>_<Language>"
-# 输出: VIDEO_1920x1080_avc1.64001f_en.mp4
-
-注意:
-如果不使用 --save-pattern，程序会在文件名冲突时自动使用流的元数据(分辨率、带宽等)
-生成唯一的文件名，而不是简单地添加 ".copy" 后缀。
+# 按分辨率命名视频
+--save-name video --save-pattern "<SaveName>_<Resolution>"
+# 加入码率 (bit/s)
+--save-name video --save-pattern "<SaveName>_<Resolution>_<Bandwidth>bps"
+# 按语言和声道命名音轨
+--save-name audio --save-pattern "<SaveName>_<Language>_<Channels>"
+# 用任务ID区分多个配置相同的轨道
+--save-name video --save-pattern "<SaveName>_<Id>_<Codecs>"
 ```
 
 </details>

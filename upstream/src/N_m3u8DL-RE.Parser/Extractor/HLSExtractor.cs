@@ -6,6 +6,7 @@ using N_m3u8DL_RE.Common.Resource;
 using N_m3u8DL_RE.Parser.Util;
 using N_m3u8DL_RE.Parser.Constants;
 using N_m3u8DL_RE.Common.Util;
+using System.Globalization;
 
 namespace N_m3u8DL_RE.Parser.Extractor;
 
@@ -23,6 +24,7 @@ internal class HLSExtractor : IExtractor
     private string BaseUrl = string.Empty;
     private string M3u8Content = string.Empty;
     private bool MasterM3u8Flag = false;
+    private bool durationWarningShown;
 
     public ParserConfig ParserConfig { get; set; }
 
@@ -218,7 +220,7 @@ internal class HLSExtractor : IExtractor
         return stream.Codecs.Split(',').All(codec => AudioCodecIds.Contains(codec.Trim().Split('.')[0]));
     }
 
-    private Task<Playlist> ParseListAsync(StreamSpec? stream = null)
+    private Task<Playlist> ParseListAsync(StreamSpec? stream = null, CancellationToken cancellationToken = default, bool liveRefresh = false, TimeSpan? requestTimeout = null)
     {
         // 独立媒体播放列表没有轨道类型；无法识别的主变体沿用视频范围。
         var applyCustomHLS = stream == null || (ParserConfig.CustomHLSScope switch
@@ -308,7 +310,9 @@ internal class HLSExtractor : IExtractor
             // 解析定义的分段长度
             else if (line.StartsWith(HLSTags.ext_x_targetduration))
             {
-                playlist.TargetDuration = Convert.ToDouble(ParserUtil.GetAttribute(line));
+                var value = ParserUtil.GetAttribute(line);
+                playlist.TargetDuration = double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var duration) &&
+                                          IsValidDuration(duration) && duration > 0 ? duration : null;
             }
             // 解析起始编号
             else if (line.StartsWith(HLSTags.ext_x_media_sequence))
@@ -361,7 +365,7 @@ internal class HLSExtractor : IExtractor
                 if (line != lastKeyLine)
                 {
                     // 调用处理器进行解析
-                    var parsedInfo = ParseKey(line, keyConfig);
+                    var parsedInfo = ParseKey(line, keyConfig, cancellationToken, liveRefresh, requestTimeout);
                     currentEncryptInfo.Method = parsedInfo.Method;
                     currentEncryptInfo.Key = parsedInfo.Key;
                     currentEncryptInfo.IV = parsedInfo.IV;
@@ -372,7 +376,8 @@ internal class HLSExtractor : IExtractor
             else if (line.StartsWith(HLSTags.extinf))
             {
                 string[] tmp = ParserUtil.GetAttribute(line).Split(',');
-                segment.Duration = Convert.ToDouble(tmp[0]);
+                segment.Duration = double.TryParse(tmp[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var duration)
+                    ? duration : double.NaN;
                 segment.Index = segIndex;
                 // 是否有加密，有的话写入KEY和IV
                 if (currentEncryptInfo.Method != EncryptMethod.NONE)
@@ -488,6 +493,25 @@ internal class HLSExtractor : IExtractor
             });
         }
 
+        var invalidSegments = mediaParts.SelectMany(part => part.MediaSegments)
+            .Where(segment => !IsValidDuration(segment.Duration)).ToList();
+        if (invalidSegments.Count > 0)
+        {
+            // 异常 EXTINF（如跨天计算错误产生的负值）仍保留分片，用目标时长或正常分片估算，
+            // 防止异常值污染录制进度、时长上限和字幕时间轴；零时长的兼容片段保持原样。
+            var fallbackDuration = playlist.TargetDuration ?? mediaParts.SelectMany(part => part.MediaSegments)
+                .FirstOrDefault(segment => IsValidDuration(segment.Duration) && segment.Duration > 0)?.Duration;
+            if (fallbackDuration == null)
+                throw new FormatException(ResString.hlsInvalidDuration);
+            foreach (var invalidSegment in invalidSegments)
+                invalidSegment.Duration = fallbackDuration.Value;
+            if (!durationWarningShown)
+            {
+                Logger.Warn(ResString.hlsInvalidDurationFallback);
+                durationWarningShown = true;
+            }
+        }
+
         playlist.MediaParts = mediaParts;
         playlist.IsLive = !isEndlist;
         // 直播尚未发布首片时仍需要保留 init，供原有录制流程初始化；点播去掉孤立 MAP。
@@ -504,14 +528,18 @@ internal class HLSExtractor : IExtractor
         return Task.FromResult(playlist);
     }
 
-    private EncryptInfo ParseKey(string keyLine, ParserConfig keyConfig)
+    private static bool IsValidDuration(double duration) =>
+        double.IsFinite(duration) && duration >= 0 && duration < TimeSpan.MaxValue.TotalSeconds;
+
+    private EncryptInfo ParseKey(string keyLine, ParserConfig keyConfig, CancellationToken cancellationToken, bool liveRefresh, TimeSpan? requestTimeout)
     {
         foreach (var p in keyConfig.KeyProcessors)
         {
             if (p.CanProcess(ExtractorType, keyLine, M3u8Url, M3u8Content, keyConfig))
             {
                 // 匹配到对应处理器后不再继续
-                return p.Process(keyLine, M3u8Url, M3u8Content, keyConfig);
+                return liveRefresh ? p.Process(keyLine, M3u8Url, M3u8Content, keyConfig, cancellationToken, requestTimeout)
+                    : p.Process(keyLine, M3u8Url, M3u8Content, keyConfig);
             }
         }
 
@@ -542,24 +570,24 @@ internal class HLSExtractor : IExtractor
         ];
     }
 
-    private async Task LoadM3u8FromUrlAsync(string url)
+    private async Task LoadM3u8FromUrlAsync(string url, CancellationToken cancellationToken = default, TimeSpan? requestTimeout = null)
     {
         // Logger.Info(ResString.loadingUrl + url);
         if (url.StartsWith("file:"))
         {
             var uri = new Uri(url);
-            this.M3u8Content = File.ReadAllText(uri.LocalPath);
+            this.M3u8Content = await File.ReadAllTextAsync(uri.LocalPath, cancellationToken);
         }
         else if (url.StartsWith("http"))
         {
             try
             {
-                (this.M3u8Content, url) = await HTTPUtil.GetWebSourceAndNewUrlAsync(url, ParserConfig.Headers);
+                (this.M3u8Content, url) = await HTTPUtil.GetWebSourceAndNewUrlAsync(url, ParserConfig.Headers, cancellationToken, requestTimeout);
             }
             catch (HttpRequestException) when (ParserConfig.OriginalUrl.StartsWith("http") && url != ParserConfig.OriginalUrl)
             {
                 // 当URL无法访问时，再请求原始URL
-                (this.M3u8Content, url) = await HTTPUtil.GetWebSourceAndNewUrlAsync(ParserConfig.OriginalUrl, ParserConfig.Headers);
+                (this.M3u8Content, url) = await HTTPUtil.GetWebSourceAndNewUrlAsync(ParserConfig.OriginalUrl, ParserConfig.Headers, cancellationToken, requestTimeout);
             }
         }
 
@@ -573,10 +601,10 @@ internal class HLSExtractor : IExtractor
     /// </summary>
     /// <param name="lists"></param>
     /// <returns></returns>
-    private async Task RefreshUrlFromMaster(List<StreamSpec> lists)
+    private async Task RefreshUrlFromMaster(List<StreamSpec> lists, CancellationToken cancellationToken, TimeSpan? requestTimeout)
     {
         // 重新加载master m3u8, 刷新选中流的URL
-        await LoadM3u8FromUrlAsync(ParserConfig.Url);
+        await LoadM3u8FromUrlAsync(ParserConfig.Url, cancellationToken, requestTimeout);
         var newStreams = await ParseMasterListAsync();
         newStreams = newStreams.DistinctBy(p => p.Url).ToList();
         foreach (var l in lists)
@@ -589,24 +617,26 @@ internal class HLSExtractor : IExtractor
         }
     }
 
-    public async Task FetchPlayListAsync(List<StreamSpec> lists)
+    public Task FetchPlayListAsync(List<StreamSpec> lists) => FetchPlayListAsync(lists, default);
+
+    private async Task FetchPlayListAsync(List<StreamSpec> lists, CancellationToken cancellationToken, bool liveRefresh = false, TimeSpan? requestTimeout = null)
     {
         for (int i = 0; i < lists.Count; i++)
         {
             try
             {
                 // 直接重新加载m3u8
-                await LoadM3u8FromUrlAsync(lists[i].Url!);
+                await LoadM3u8FromUrlAsync(lists[i].Url!, cancellationToken, requestTimeout);
             }
             catch (HttpRequestException) when (MasterM3u8Flag)
             {
                 Logger.WarnMarkUp("Can not load m3u8. Try refreshing url from master url...");
                 // 当前URL无法加载 尝试从Master链接中刷新URL
-                await RefreshUrlFromMaster(lists);
-                await LoadM3u8FromUrlAsync(lists[i].Url!);
+                await RefreshUrlFromMaster(lists, cancellationToken, requestTimeout);
+                await LoadM3u8FromUrlAsync(lists[i].Url!, cancellationToken, requestTimeout);
             }
 
-            var newPlaylist = await ParseListAsync(MasterM3u8Flag ? lists[i] : null);
+            var newPlaylist = await ParseListAsync(MasterM3u8Flag ? lists[i] : null, cancellationToken, liveRefresh, requestTimeout);
             var previousInits = lists[i].Playlist?.MediaParts.Select(part => part.MediaInit).OfType<MediaSegment>().ToList() ?? [];
             foreach (var part in newPlaylist.MediaParts)
             {
@@ -632,9 +662,9 @@ internal class HLSExtractor : IExtractor
         }
     }
 
-    public async Task RefreshPlayListAsync(List<StreamSpec> streamSpecs)
+    public async Task RefreshPlayListAsync(List<StreamSpec> streamSpecs, CancellationToken cancellationToken = default, TimeSpan? requestTimeout = null)
     {
-        await FetchPlayListAsync(streamSpecs);
+        await FetchPlayListAsync(streamSpecs, cancellationToken, liveRefresh: true, requestTimeout: requestTimeout);
     }
 
     private static bool SameInit(MediaSegment a, MediaSegment b) =>

@@ -27,8 +27,20 @@ public static class HTTPUtil
     {
         Timeout = TimeSpan.FromSeconds(100),
         DefaultRequestVersion = HttpVersion.Version20,
-        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
     };
+
+    public static HttpRequestMessage CreateRequest(HttpMethod method, string url, HttpClient? client = null)
+    {
+        client ??= AppHttpClient;
+        // SendAsync 不会把 HttpClient 的默认版本复制到手动创建的请求，必须显式设置。
+        // 默认在 HTTPS 上优先协商 HTTP/2，服务端不支持时回退 HTTP/1.1。
+        return new HttpRequestMessage(method, url)
+        {
+            Version = client.DefaultRequestVersion,
+            VersionPolicy = client.DefaultVersionPolicy,
+        };
+    }
 
     public static void ConfigureCookies(string? path)
     {
@@ -46,19 +58,17 @@ public static class HTTPUtil
         if (value == null)
             return;
         HttpHandler.ConnectCallback = NetworkInterfaceBinding.Create(value).ConnectAsync;
-        // 接口约束只用于 TCP；HTTP/3 的 QUIC 连接不会经过 ConnectCallback。
-        AppHttpClient.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
     }
 
     private static async Task<HttpResponseMessage> DoGetAsync(string url, Dictionary<string, string>? headers = null,
-        bool identityEncoding = false, int redirectCount = 0)
+        bool identityEncoding = false, int redirectCount = 0, CancellationToken cancellationToken = default)
     {
         if (redirectCount > 10)
         {
-            throw new HttpRequestException("Too many redirects while loading URL.");
+            throw new HttpRequestException(HttpRequestError.ConfigurationLimitExceeded, ResString.httpTooManyRedirects);
         }
         Logger.Debug(ResString.fetch + url);
-        using var webRequest = new HttpRequestMessage(HttpMethod.Get, url);
+        using var webRequest = CreateRequest(HttpMethod.Get, url);
         webRequest.Headers.TryAddWithoutValidation("Accept-Encoding", identityEncoding ? "identity" : "gzip, deflate");
         webRequest.Headers.CacheControl = CacheControlHeaderValue.Parse("no-cache");
         webRequest.Headers.Connection.Clear();
@@ -72,7 +82,7 @@ public static class HTTPUtil
 
         Logger.Debug(webRequest.Headers.ToString());
         // 手动处理跳转，以免自定义Headers丢失
-        var webResponse = await AppHttpClient.SendAsync(webRequest, HttpCompletionOption.ResponseHeadersRead);
+        var webResponse = await AppHttpClient.SendAsync(webRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (((int)webResponse.StatusCode).ToString().StartsWith("30"))
         {
             HttpResponseHeaders respHeaders = webResponse.Headers;
@@ -95,7 +105,7 @@ public static class HTTPUtil
                 {
                     Logger.Extra($"Redirected => {redirectedUrl}");
                     webResponse.Dispose();
-                    return await DoGetAsync(redirectedUrl, headers, identityEncoding, redirectCount + 1);
+                    return await DoGetAsync(redirectedUrl, headers, identityEncoding, redirectCount + 1, cancellationToken);
                 }
             }
         }
@@ -114,15 +124,21 @@ public static class HTTPUtil
         return webResponse;
     }
 
-    public static async Task<byte[]> GetBytesAsync(string url, Dictionary<string, string>? headers = null)
+    public static async Task<byte[]> GetBytesAsync(string url, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default, TimeSpan? requestTimeout = null)
     {
         if (url.StartsWith("file:"))
         {
-            return await File.ReadAllBytesAsync(new Uri(url).LocalPath);
+            return await File.ReadAllBytesAsync(new Uri(url).LocalPath, cancellationToken);
         }
 
-        var webResponse = await DoGetAsync(url, headers);
-        var bytes = await webResponse.Content.ReadAsByteArrayAsync();
+        using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (requestTimeout is { } timeout)
+            readTimeout.CancelAfter(timeout);
+        // 直播 key 从发起请求到读完共用一个计时，重定向也不能延长等待。
+        using var webResponse = await DoGetAsync(url, headers, cancellationToken: readTimeout.Token);
+        if (requestTimeout == null && AppHttpClient.Timeout != Timeout.InfiniteTimeSpan)
+            readTimeout.CancelAfter(AppHttpClient.Timeout);
+        var bytes = await webResponse.Content.ReadAsByteArrayAsync(readTimeout.Token);
         Logger.Debug(HexUtil.BytesToHex(bytes, " "));
         return bytes;
     }
@@ -147,18 +163,22 @@ public static class HTTPUtil
     /// <param name="url"></param>
     /// <param name="headers"></param>
     /// <returns>(Source Code, RedirectedUrl)</returns>
-    public static async Task<(string, string)> GetWebSourceAndNewUrlAsync(string url, Dictionary<string, string>? headers = null)
+    public static async Task<(string, string)> GetWebSourceAndNewUrlAsync(string url, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default, TimeSpan? requestTimeout = null)
     {
-        using var result = await GetWebSourceResultAsync(url, headers);
+        using var result = await GetWebSourceResultAsync(url, headers, cancellationToken, requestTimeout);
         return (result.Source, result.Url);
     }
 
     /// <summary>
     /// 读取少量响应内容判断格式。二进制响应由调用者负责释放，避免直录时再次请求 URL。
     /// </summary>
-    public static async Task<WebSourceResult> GetWebSourceResultAsync(string url, Dictionary<string, string>? headers = null)
+    public static async Task<WebSourceResult> GetWebSourceResultAsync(string url, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default, TimeSpan? requestTimeout = null)
     {
-        var webResponse = await DoGetAsync(url, headers, identityEncoding: true);
+        using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (requestTimeout is { } timeout)
+            readTimeout.CancelAfter(timeout);
+        // 仅直播刷新传入独立超时；初始解析和点播保留全局请求、正文分别计时的行为。
+        var webResponse = await DoGetAsync(url, headers, identityEncoding: true, cancellationToken: readTimeout.Token);
         try
         {
             // 打开流，读取少量样本检测类型
@@ -166,8 +186,7 @@ public static class HTTPUtil
             const int minimumSampleSize = 188 * 3;
             var responseStream = await webResponse.Content.ReadAsStreamAsync();
             var buffer = new byte[sampleSize];
-            using var readTimeout = new CancellationTokenSource();
-            if (AppHttpClient.Timeout != Timeout.InfiniteTimeSpan)
+            if (requestTimeout == null && AppHttpClient.Timeout != Timeout.InfiniteTimeSpan)
             {
                 readTimeout.CancelAfter(AppHttpClient.Timeout);
             }
@@ -258,7 +277,7 @@ public static class HTTPUtil
     public static async Task<string> GetPostResponseAsync(string Url, byte[] postData)
     {
         string htmlCode;
-        using HttpRequestMessage request = new(HttpMethod.Post, Url);
+        using var request = CreateRequest(HttpMethod.Post, Url);
         request.Headers.TryAddWithoutValidation("Content-Type", "application/json");
         request.Headers.TryAddWithoutValidation("Content-Length", postData.Length.ToString());
         request.Content = new ByteArrayContent(postData);

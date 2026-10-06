@@ -6,6 +6,12 @@ public static class ResString
 
     public static readonly string ReLiveTs = "<RE_LIVE_TS>";
     public static readonly string ReBinaryData = "<RE_BINARY_DATA>";
+    public static string cmd_config => GetText("cmd_config");
+    public static string cmd_noConfig => GetText("cmd_noConfig");
+    public static string configFileLoadFailed => GetText("configFileLoadFailed");
+    public static string configFileConflict => GetText("configFileConflict");
+    public static string configFileOptionsOnly => GetText("configFileOptionsOnly");
+    public static string responseFileRecursion => GetText("responseFileRecursion");
     public static string singleFileRealtimeDecryptWarn => GetText("singleFileRealtimeDecryptWarn");
     public static string singleFileSplitWarn => GetText("singleFileSplitWarn");
     public static string customRangeWarn => GetText("customRangeWarn");
@@ -42,6 +48,7 @@ public static class ResString
     public static string cmd_cookies => GetText("cmd_cookies");
     public static string cookiesFileReadFailed => GetText("cookiesFileReadFailed");
     public static string cookiesFileInvalidLine => GetText("cookiesFileInvalidLine");
+    public static string cookiesFileSkippedLine => GetText("cookiesFileSkippedLine");
     public static string cmd_muxImport => GetText("cmd_muxImport");
     public static string cmd_muxImport_more => GetText("cmd_muxImport_more");
     public static string cmd_selectVideo => GetText("cmd_selectVideo");
@@ -69,6 +76,7 @@ public static class ResString
     public static string cmd_saveDir => GetText("cmd_saveDir");
     public static string cmd_saveName => GetText("cmd_saveName");
     public static string cmd_savePattern => GetText("cmd_savePattern");
+    public static string cmd_savePattern_more => GetText("cmd_savePattern_more");
     public static string cmd_logFilePath => GetText("cmd_logFilePath");
     public static string cmd_skipDownload => GetText("cmd_skipDownload");
     public static string cmd_noDateInfo => GetText("cmd_noDateInfo");
@@ -113,6 +121,12 @@ public static class ResString
     public static string liveLimitReached => GetText("liveLimitReached");
     public static string liveStreamEnded => GetText("liveStreamEnded");
     public static string liveIdleTimeoutReached => GetText("liveIdleTimeoutReached");
+    public static string liveNetworkRetry => GetText("liveNetworkRetry");
+    public static string liveNetworkTimeout => GetText("liveNetworkTimeout");
+    public static string liveNetworkRecovered => GetText("liveNetworkRecovered");
+    public static string liveSegmentUnavailable => GetText("liveSegmentUnavailable");
+    public static string liveSegmentNotReady => GetText("liveSegmentNotReady");
+    public static string httpTooManyRedirects => GetText("httpTooManyRedirects");
     public static string saveName => GetText("saveName");
     public static string taskStartAt => GetText("taskStartAt");
     public static string namedPipeCreated => GetText("namedPipeCreated");
@@ -175,6 +189,8 @@ public static class ResString
     public static string hlsSubtitleOriginMissing => GetText("hlsSubtitleOriginMissing");
     public static string hlsTimestampMapInvalid => GetText("hlsTimestampMapInvalid");
     public static string hlsByteRangeMissingPrevious => GetText("hlsByteRangeMissingPrevious");
+    public static string hlsInvalidDuration => GetText("hlsInvalidDuration");
+    public static string hlsInvalidDurationFallback => GetText("hlsInvalidDurationFallback");
     public static string mediaPartInputMismatch => GetText("mediaPartInputMismatch");
     public static string concatInputPathInvalid => GetText("concatInputPathInvalid");
     public static string tfdtVersionUnsupported => GetText("tfdtVersionUnsupported");

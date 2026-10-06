@@ -4,6 +4,42 @@ internal static class StaticText
 {
     public static readonly Dictionary<string, TextContainer> LANG_DIC = new()
     {
+        ["cmd_config"] = new TextContainer
+        (
+            zhCN: "读取指定配置文件，替代用户默认配置；命令行选项优先",
+            zhTW: "讀取指定設定檔，取代使用者預設設定；命令列選項優先",
+            enUS: "Read a configuration file instead of the user default; command-line options take precedence"
+        ),
+        ["cmd_noConfig"] = new TextContainer
+        (
+            zhCN: "不读取配置文件，不能与 --config 同时使用",
+            zhTW: "不讀取設定檔，不能與 --config 同時使用",
+            enUS: "Disable configuration loading; cannot be combined with --config"
+        ),
+        ["configFileLoadFailed"] = new TextContainer
+        (
+            zhCN: "配置文件加载失败",
+            zhTW: "設定檔載入失敗",
+            enUS: "Failed to load configuration"
+        ),
+        ["configFileConflict"] = new TextContainer
+        (
+            zhCN: "--config 与 --no-config 不能同时使用",
+            zhTW: "--config 與 --no-config 不能同時使用",
+            enUS: "--config and --no-config cannot be used together"
+        ),
+        ["configFileOptionsOnly"] = new TextContainer
+        (
+            zhCN: "配置文件只能包含下载选项，不能包含下载地址、--config、--no-config、帮助、版本或补全操作",
+            zhTW: "設定檔只能包含下載選項，不能包含下載網址、--config、--no-config、說明、版本或補全操作",
+            enUS: "Configuration files may only contain download options, not input URLs, --config, --no-config, help, version or completion actions"
+        ),
+        ["responseFileRecursion"] = new TextContainer
+        (
+            zhCN: "参数文件存在循环引用或嵌套层数过多",
+            zhTW: "參數檔案存在循環引用或巢狀層數過多",
+            enUS: "Response files contain a reference cycle or are nested too deeply"
+        ),
         ["singleFileSplitWarn"] = new TextContainer
         (
             zhCN: "整段文件已被自动切割为小分片以加速下载",
@@ -174,9 +210,9 @@ internal static class StaticText
         ),
         ["cmd_appendUrlParams"] = new TextContainer
         (
-            zhCN: "将输入Url的Params添加至分片, 对某些网站很有用, 例如 kakao.com",
-            zhTW: "將輸入Url的Params添加至分片, 對某些網站很有用, 例如 kakao.com",
-            enUS: "Add Params of input Url to segments, useful for some websites, such as kakao.com"
+            zhCN: "将输入URL的查询参数添加至分片；本地清单使用 --base-url 的参数",
+            zhTW: "將輸入URL的查詢參數添加至分片；本地清單使用 --base-url 的參數",
+            enUS: "Append input URL query parameters to segments; local manifests use --base-url parameters"
         ),
         ["cmd_autoSelect"] = new TextContainer
         (
@@ -210,15 +246,15 @@ internal static class StaticText
         ),
         ["cmd_downloadRetryCount"] = new TextContainer
         (
-            zhCN: "每个分片下载异常时的重试次数",
-            zhTW: "每個分片下載異常時的重試次數",
-            enUS: "The number of retries when download segment error"
+            zhCN: "每个分片下载异常时的重试次数；分片直播临时网络故障在重试耗尽后仍会等待恢复",
+            zhTW: "每個分片下載異常時的重試次數；分片直播暫時網路故障在重試耗盡後仍會等待恢復",
+            enUS: "Retries per segment; segmented live recording keeps waiting for recovery after transient network failures"
         ),
         ["cmd_httpRequestTimeout"] = new TextContainer
         (
-            zhCN: "HTTP请求的超时时间(秒)",
-            zhTW: "HTTP請求的超時時間(秒)",
-            enUS: "Timeout duration for HTTP requests (in seconds)"
+            zhCN: "HTTP请求超时(秒)；分片直播未指定时自动调整，指定后也用于分片连续无数据超时，不限制总下载时长",
+            zhTW: "HTTP請求逾時(秒)；分片直播未指定時自動調整，指定後也用於分片連續無資料逾時，不限制總下載時長",
+            enUS: "HTTP timeout in seconds; segmented live recording adjusts automatically unless specified, also bounds segment read stalls, not total download time"
         ),
         ["cmd_decryptionBinaryPath"] = new TextContainer
         (
@@ -274,6 +310,12 @@ internal static class StaticText
             zhTW: "Cookie 檔案第 {0} 行格式無效（需要 Netscape 格式）",
             enUS: "Invalid cookie file format at line {0} (Netscape format required)"
         ),
+        ["cookiesFileSkippedLine"] = new TextContainer
+        (
+            zhCN: "已跳过 Cookie 文件第 {0} 行：名称或值无法用于请求头",
+            zhTW: "已略過 Cookie 檔案第 {0} 行：名稱或值無法用於請求標頭",
+            enUS: "Skipped cookie file line {0}: name or value cannot be sent in a request header"
+        ),
         ["cmd_Input"] = new TextContainer
         (
             zhCN: "链接或文件",
@@ -324,21 +366,78 @@ internal static class StaticText
         ),
         ["cmd_savePattern"] = new TextContainer
         (
-            zhCN: "设置保存文件命名模板, 支持使用变量: \n" +
-                  "<SaveName>, <Id>, <Codecs>, <Language>, <Resolution>, \n" +
-                  "<Bandwidth>, <MediaType>, <Channels>, <FrameRate>, \n" +
-                  "<VideoRange>, <GroupId>, <Ext>\n" +
-                  "示例: --save-pattern \"<SaveName>_<Resolution>_<Bandwidth>\"",
-            zhTW: "設置保存檔案命名模板, 支持使用變數: \n" +
-                  "<SaveName>, <Id>, <Codecs>, <Language>, <Resolution>, \n" +
-                  "<Bandwidth>, <MediaType>, <Channels>, <FrameRate>, \n" +
-                  "<VideoRange>, <GroupId>, <Ext>\n" +
-                  "示例: --save-pattern \"<SaveName>_<Resolution>_<Bandwidth>\"",
-            enUS: "Set output filename pattern with variables: \n" +
-                  "<SaveName>, <Id>, <Codecs>, <Language>, <Resolution>, \n" +
-                  "<Bandwidth>, <MediaType>, <Channels>, <FrameRate>, \n" +
-                  "<VideoRange>, <GroupId>, <Ext>\n" +
-                  "Example: --save-pattern \"<SaveName>_<Resolution>_<Bandwidth>\""
+            zhCN: "设置保存文件命名模板. 输入 \"--morehelp save-pattern\" 以查看变量和示例",
+            zhTW: "設置保存檔案命名模板. 輸入 \"--morehelp save-pattern\" 以查看變數和範例",
+            enUS: "Set output filename pattern. Use \"--morehelp save-pattern\" for variables and examples"
+        ),
+        ["cmd_savePattern_more"] = new TextContainer
+        (
+            zhCN: "使用变量设置各轨道的输出文件名主体，程序自动追加输出扩展名.\r\n\r\n" +
+                  "* <SaveName>: --save-name 指定的保存名称，未指定时为空\r\n" +
+                  "* <Id>: 轨道下载任务ID\r\n" +
+                  "* <Codecs>: 编码信息 (如 avc1.64001f, mp4a.40.2)\r\n" +
+                  "* <Language>: 语言代码 (如 en, zh-CN)\r\n" +
+                  "* <Resolution>: 视频分辨率 (如 1920x1080)\r\n" +
+                  "* <Bandwidth>: 码率数值，单位 bit/s (如 5000000)\r\n" +
+                  "* <MediaType>: 媒体类型 (VIDEO, AUDIO, SUBTITLES)\r\n" +
+                  "* <Channels>: 音频声道信息\r\n" +
+                  "* <FrameRate>: 视频帧率\r\n" +
+                  "* <VideoRange>: 视频动态范围 (如 SDR, HDR10)\r\n" +
+                  "* <GroupId>: 流组标识符\r\n\r\n" +
+                  "变量区分大小写，缺失的信息替换为空字符串. 模板不需要包含扩展名.\r\n\r\n" +
+                  "例如:\r\n" +
+                  "# 按分辨率命名视频\r\n" +
+                  "--save-name video --save-pattern \"<SaveName>_<Resolution>\"\r\n" +
+                  "# 加入码率 (bit/s)\r\n" +
+                  "--save-name video --save-pattern \"<SaveName>_<Resolution>_<Bandwidth>bps\"\r\n" +
+                  "# 按语言和声道命名音轨\r\n" +
+                  "--save-name audio --save-pattern \"<SaveName>_<Language>_<Channels>\"\r\n" +
+                  "# 用任务ID区分多个配置相同的轨道\r\n" +
+                  "--save-name video --save-pattern \"<SaveName>_<Id>_<Codecs>\"\r\n",
+            zhTW: "使用變數設置各軌道的輸出檔案名稱主體，程式自動附加輸出副檔名.\r\n\r\n" +
+                  "* <SaveName>: --save-name 指定的保存名稱，未指定時為空\r\n" +
+                  "* <Id>: 軌道下載任務ID\r\n" +
+                  "* <Codecs>: 編碼資訊 (如 avc1.64001f, mp4a.40.2)\r\n" +
+                  "* <Language>: 語言代碼 (如 en, zh-CN)\r\n" +
+                  "* <Resolution>: 影片解析度 (如 1920x1080)\r\n" +
+                  "* <Bandwidth>: 碼率數值，單位 bit/s (如 5000000)\r\n" +
+                  "* <MediaType>: 媒體類型 (VIDEO, AUDIO, SUBTITLES)\r\n" +
+                  "* <Channels>: 音訊聲道資訊\r\n" +
+                  "* <FrameRate>: 影片影格率\r\n" +
+                  "* <VideoRange>: 影片動態範圍 (如 SDR, HDR10)\r\n" +
+                  "* <GroupId>: 串流群組識別碼\r\n\r\n" +
+                  "變數區分大小寫，缺失的資訊替換為空字串. 模板不需要包含副檔名.\r\n\r\n" +
+                  "例如:\r\n" +
+                  "# 按解析度命名影片\r\n" +
+                  "--save-name video --save-pattern \"<SaveName>_<Resolution>\"\r\n" +
+                  "# 加入碼率 (bit/s)\r\n" +
+                  "--save-name video --save-pattern \"<SaveName>_<Resolution>_<Bandwidth>bps\"\r\n" +
+                  "# 按語言和聲道命名音軌\r\n" +
+                  "--save-name audio --save-pattern \"<SaveName>_<Language>_<Channels>\"\r\n" +
+                  "# 用任務ID區分多個配置相同的軌道\r\n" +
+                  "--save-name video --save-pattern \"<SaveName>_<Id>_<Codecs>\"\r\n",
+            enUS: "Set each track's output filename stem using variables. The output extension is appended automatically.\r\n\r\n" +
+                  "* <SaveName>: name specified by --save-name, or empty when omitted\r\n" +
+                  "* <Id>: track download task ID\r\n" +
+                  "* <Codecs>: codec information (e.g. avc1.64001f, mp4a.40.2)\r\n" +
+                  "* <Language>: language code (e.g. en, zh-CN)\r\n" +
+                  "* <Resolution>: video resolution (e.g. 1920x1080)\r\n" +
+                  "* <Bandwidth>: bitrate value in bit/s (e.g. 5000000)\r\n" +
+                  "* <MediaType>: media type (VIDEO, AUDIO, SUBTITLES)\r\n" +
+                  "* <Channels>: audio channel information\r\n" +
+                  "* <FrameRate>: video frame rate\r\n" +
+                  "* <VideoRange>: video dynamic range (e.g. SDR, HDR10)\r\n" +
+                  "* <GroupId>: stream group identifier\r\n\r\n" +
+                  "Variables are case-sensitive. Missing values become empty strings. Do not include the output extension in the pattern.\r\n\r\n" +
+                  "Examples:\r\n" +
+                  "# Name video tracks by resolution\r\n" +
+                  "--save-name video --save-pattern \"<SaveName>_<Resolution>\"\r\n" +
+                  "# Include bitrate (bit/s)\r\n" +
+                  "--save-name video --save-pattern \"<SaveName>_<Resolution>_<Bandwidth>bps\"\r\n" +
+                  "# Name audio tracks by language and channels\r\n" +
+                  "--save-name audio --save-pattern \"<SaveName>_<Language>_<Channels>\"\r\n" +
+                  "# Use task IDs to distinguish tracks with the same configuration\r\n" +
+                  "--save-name video --save-pattern \"<SaveName>_<Id>_<Codecs>\"\r\n"
         ),
         ["cmd_logFilePath"] = new TextContainer
         (
@@ -603,6 +702,18 @@ internal static class StaticText
             zhCN: "HLS BYTERANGE 省略偏移时，必须存在前一个字节范围。",
             zhTW: "HLS BYTERANGE 省略偏移時，必須存在前一個位元組範圍。",
             enUS: "Implicit HLS BYTERANGE requires a preceding byte range."
+        ),
+        ["hlsInvalidDuration"] = new TextContainer
+        (
+            zhCN: "HLS 分片时长无效，清单中也没有可用于估算的有效时长。",
+            zhTW: "HLS 分片時長無效，清單中也沒有可用於估算的有效時長。",
+            enUS: "Invalid HLS segment duration, with no valid playlist duration available for estimation."
+        ),
+        ["hlsInvalidDurationFallback"] = new TextContainer
+        (
+            zhCN: "检测到异常 HLS 分片时长，已用清单中的有效时长估算；录制时长可能存在偏差。",
+            zhTW: "偵測到異常 HLS 分片時長，已用清單中的有效時長估算；錄製時長可能存在偏差。",
+            enUS: "Invalid HLS segment durations were estimated from valid playlist durations; recording duration may be approximate."
         ),
         ["mediaPartInputMismatch"] = new TextContainer
         (
@@ -921,6 +1032,8 @@ internal static class StaticText
         ["cmd_custom_range"] = new TextContainer
         (
             zhCN: "下载点播内容时, 仅下载部分分片.\r\n\r\n" +
+                  "时间格式为 MM:SS 或 HH:MM:SS，省略起点表示从头开始，省略终点表示下载到末尾.\r\n" +
+                  "时间范围按分片起始时间筛选（包含起止边界），保留完整分片，不进行精确裁切.\r\n\r\n" +
                   "例如: \r\n" +
                   "# 下载[0,10]共11个分片\r\n" +
                   "--custom-range 0-10\r\n" +
@@ -929,8 +1042,14 @@ internal static class StaticText
                   "# 下载前100个分片\r\n" +
                   "--custom-range -99\r\n" +
                   "# 下载第5分钟到20分钟的内容\r\n" +
-                  "--custom-range 05:00-20:00\r\n",
+                  "--custom-range 05:00-20:00\r\n" +
+                  "# 跳过前26秒，下载后续内容\r\n" +
+                  "--custom-range 00:26-\r\n" +
+                  "# 仅下载前26秒的内容（可能包含跨越26秒边界的完整分片）\r\n" +
+                  "--custom-range -00:26\r\n",
             zhTW: "下載點播內容時, 僅下載部分分片.\r\n\r\n" +
+                  "時間格式為 MM:SS 或 HH:MM:SS，省略起點表示從頭開始，省略終點表示下載到末尾.\r\n" +
+                  "時間範圍按分片起始時間篩選（包含起止邊界），保留完整分片，不進行精確裁切.\r\n\r\n" +
                   "例如: \r\n" +
                   "# 下載[0,10]共11個分片\r\n" +
                   "--custom-range 0-10\r\n" +
@@ -939,8 +1058,14 @@ internal static class StaticText
                   "# 下載前100個分片\r\n" +
                   "--custom-range -99\r\n" +
                   "# 下載第5分鐘到20分鐘的內容\r\n" +
-                  "--custom-range 05:00-20:00\r\n",
+                  "--custom-range 05:00-20:00\r\n" +
+                  "# 跳過前26秒，下載後續內容\r\n" +
+                  "--custom-range 00:26-\r\n" +
+                  "# 僅下載前26秒的內容（可能包含跨越26秒邊界的完整分片）\r\n" +
+                  "--custom-range -00:26\r\n",
             enUS: "Download only part of the segments when downloading vod content.\r\n\r\n" +
+                  "Use MM:SS or HH:MM:SS. Omit the start to download from the beginning, or omit the end to download to the end.\r\n" +
+                  "Time ranges select segments by their start times, including both boundaries. Whole segments are retained; no precise trimming is performed.\r\n\r\n" +
                   "Examples: \r\n" +
                   "# Download [0,10], a total of 11 segments\r\n" +
                   "--custom-range 0-10\r\n" +
@@ -949,7 +1074,11 @@ internal static class StaticText
                   "# Download the first 100 segments\r\n" +
                   "--custom-range -99\r\n" +
                   "# Download content from the 05:00 to 20:00\r\n" +
-                  "--custom-range 05:00-20:00\r\n"
+                  "--custom-range 05:00-20:00\r\n" +
+                  "# Skip the first 26 seconds and download the remaining content\r\n" +
+                  "--custom-range 00:26-\r\n" +
+                  "# Download only the first 26 seconds (whole segments may extend beyond 26 seconds)\r\n" +
+                  "--custom-range -00:26\r\n"
         ),
         ["cmd_selectSubtitle_more"] = new TextContainer
         (
@@ -1091,6 +1220,42 @@ internal static class StaticText
             zhCN: "连续 {0} 秒没有新分片，即将停止录制",
             zhTW: "連續 {0} 秒沒有新分片，即將停止錄製",
             enUS: "No new segments for {0} seconds, stopping live recording"
+        ),
+        ["liveNetworkRetry"] = new TextContainer
+        (
+            zhCN: "直播请求暂时失败，等待网络恢复后重试...",
+            zhTW: "直播請求暫時失敗，等待網路恢復後重試...",
+            enUS: "Live request temporarily failed, waiting to retry..."
+        ),
+        ["liveNetworkRecovered"] = new TextContainer
+        (
+            zhCN: "直播请求已恢复，继续录制",
+            zhTW: "直播請求已恢復，繼續錄製",
+            enUS: "Live request recovered, continuing recording"
+        ),
+        ["liveNetworkTimeout"] = new TextContainer
+        (
+            zhCN: "直播请求等待超时",
+            zhTW: "直播請求等待逾時",
+            enUS: "Live request timed out"
+        ),
+        ["liveSegmentUnavailable"] = new TextContainer
+        (
+            zhCN: "无法获取直播分片，跳过并继续录制；录制结果将标记为不完整",
+            zhTW: "無法取得直播分片，跳過並繼續錄製；錄製結果將標記為不完整",
+            enUS: "Unable to retrieve live segment, skipping it; the recording will be marked incomplete"
+        ),
+        ["liveSegmentNotReady"] = new TextContainer
+        (
+            zhCN: "直播分片暂时不可用，稍后重试...",
+            zhTW: "直播分片暫時無法取得，稍後重試...",
+            enUS: "Live segment is temporarily unavailable, retrying shortly..."
+        ),
+        ["httpTooManyRedirects"] = new TextContainer
+        (
+            zhCN: "HTTP重定向次数过多，请检查资源URL",
+            zhTW: "HTTP重新導向次數過多，請檢查資源URL",
+            enUS: "Too many HTTP redirects, please check the resource URL"
         ),
         ["saveName"] = new TextContainer
         (
