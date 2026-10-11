@@ -78,6 +78,33 @@ N_m3u8DL-RE "https://example.com/video.m3u8" --no-config
 
 Docker 部署建议将配置只读挂载到 `/config/config.conf`，并传入 `--config /config/config.conf`，不依赖容器的 HOME 或运行用户。
 
+## 工具命令
+
+```text
+# 字节拼接，无需 FFmpeg
+N_m3u8DL-RE concat -i 1.ts -i 2.ts -o combined.ts
+
+# 也可从目录读取，按文件名自然排序；默认匹配 *.ts，可用 --pattern 修改
+# --input-dir 不能与 -i 混用
+N_m3u8DL-RE concat --input-dir segments --pattern "*.ts" -o combined.ts
+
+# 使用 FFmpeg 合并目录中的 TS 分片
+N_m3u8DL-RE merge --input-dir segments -o merged.mp4
+
+# 混流视频、音频和字幕
+# 默认自动调整字幕时间轴，原文件不变；添加 --auto-subtitle-fix false 可关闭
+N_m3u8DL-RE mux -i video.mp4 -i audio.m4a -i subtitle.srt -o output.mp4
+
+# 设置轨道语言（lang）、轨道标题（name）和影片标题（--title）
+# --mux-import 可追加外部音轨或字幕；lang、name 均可省略
+N_m3u8DL-RE mux -i video.mp4 -i "path=audio.m4a:lang=eng:name=English" --mux-import "path=subtitle.srt:lang=zh-Hans:name=简体中文" --title "影片标题" -o output.mkv
+# 复合参数值内的冒号需写为 \:，例如 path=C\:\media\audio.m4a:lang=eng
+
+# 检查工具版本和系统环境
+N_m3u8DL-RE doctor
+N_m3u8DL-RE doctor --json > doctor.json
+```
+
 ## 命令行参数
 
 过长的自动保存名、自定义保存名和模板生成的文件名会自动缩短，并附加短哈希以减少重名。长度按 UTF-8 字节计算，不会截断中文或 emoji；自动名称的时间戳和输出文件的媒体扩展名会预留空间。
@@ -101,8 +128,8 @@ Options:
   --save-pattern <save-pattern>                           设置保存文件命名模板. 输入 "--morehelp save-pattern" 以查看变量和示例
   --log-file-path <log-file-path>                         设置日志文件路径, 例如 C:\Logs\log.txt
   --base-url <base-url>                                   设置BaseURL
-  --thread-count <number>                                 设置下载线程数 [default: 本机CPU线程数]
-  --download-retry-count <number>                         每个分片下载异常时的重试次数；分片直播临时网络故障在重试耗尽后仍会等待恢复 [default: 3]
+  --thread-count <number>                                 设置下载线程数 [default: 10]
+  --download-retry-count <number>                         每个分片下载异常时的重试次数；分片直播临时网络故障在重试耗尽后仍会等待恢复 [default: 7]
   --http-request-timeout <seconds>                        HTTP请求超时(秒)；分片直播未指定时自动调整，指定后也用于分片连续无数据超时，不限制总下载时长 [default: 100]
   --force-ansi-console                                    强制认定终端为支持ANSI且可交互的终端
   --no-ansi-color                                         去除ANSI颜色
@@ -111,7 +138,8 @@ Options:
   --skip-download                                         跳过下载 [default: False]
   --check-segments-count                                  检测实际下载的分片数量和预期数量是否匹配 [default: True]
   --binary-merge                                          二进制合并 [default: False]
-  --use-ffmpeg-concat-demuxer                             使用 ffmpeg 合并时，使用 concat 分离器而非 concat 协议 [default: False]
+  --ffmpeg-concat-mode <DEMUXER|LOCAL_HTTP|PROTOCOL>      FFmpeg 合并输入方式：LOCAL_HTTP 本机虚拟输入(默认)，PROTOCOL 直接打开全部分片，DEMUXER 使用文件列表 [default: LOCAL_HTTP]
+  --use-ffmpeg-concat-demuxer                             使用 concat 分离器合并，等同于 --ffmpeg-concat-mode DEMUXER；同一层同时指定时优先 [default: False]
   --del-after-done                                        完成后删除临时文件 [default: True]
   --no-date-info                                          混流时不写入日期信息 [default: False]
   --no-log                                                关闭日志文件输出 [default: False]
@@ -155,6 +183,7 @@ Options:
   --live-wait-time <SEC>                                  手动设置直播列表刷新间隔
   --live-idle-timeout <SEC>                               直播列表连续指定秒数无新分片时停止录制（默认关闭）
   --live-take-count <NUM>                                 手动设置录制直播时首次获取分片的数量 [default: 16]
+  --live-catchup <TIME>                                   从指定历史时间下载直播，支持回看时长或日期时间；覆盖 --live-take-count
   --mux-import <OPTIONS>                                  混流时引入外部媒体文件. 输入 "--morehelp mux-import" 以查看详细信息
   -sv, --select-video <OPTIONS>                           通过正则表达式选择符合要求的视频流. 输入 "--morehelp select-video" 以查看详细信息
   -sa, --select-audio <OPTIONS>                           通过正则表达式选择符合要求的音频流. 输入 "--morehelp select-audio" 以查看详细信息
@@ -172,6 +201,7 @@ Options:
   --generate-completion <SHELL>                           输出内嵌的补全脚本（powershell）
   -?, -h, --help                                          Show help and usage information
   --version                                               Show version information
+
 ```
 
 `--interface` 支持网卡名（如 `eth1`、`en0`、`Wi-Fi`）或本机 IP 地址。网卡名约束实际出口，IP 地址指定连接的源地址。使用代理时，约束应用于本机到代理的连接；DNS 仍由系统解析。绑定失败会明确报错，不会回退到其他网卡。Linux 按网卡名绑定可能需要额外权限，报错会包含系统原因。
@@ -359,6 +389,29 @@ More Help:
 ```
 
 </details>
+
+## FFmpeg 分片合并
+
+默认使用 `--ffmpeg-concat-mode LOCAL_HTTP`：通过仅监听 `127.0.0.1` 的临时输入提供可随机读取的连续字节流，逐个打开分片，不生成整份合并中间文件，也不受分片数量造成的文件句柄和命令行长度限制。
+
+- `LOCAL_HTTP`：默认的本机虚拟输入，保留 concat 协议的字节拼接方式。
+- `PROTOCOL`：回退到原有 `concat:文件1|文件2|…`，直接打开全部分片；大量分片仍可能遇到文件句柄上限。
+- `DEMUXER`：使用 concat 文件列表，逐文件处理媒体时间轴，结果可能与字节拼接不同。
+
+原有 `--use-ffmpeg-concat-demuxer` 继续支持，命令行选择优先于配置文件；同一层同时指定两种写法时，启用的旧参数优先。该模式选项仅影响 FFmpeg 分片合并；二进制合并、独立 init 的多段拼接及直播管道仍使用各自的处理流程。
+
+## 直播回看
+
+```bash
+# 回看一小时前开始的节目，下载 30 分钟并混流为 MKV
+N_m3u8DL-RE "URL" --live-catchup "01:00:00" --live-record-limit "00:30:00" --live-real-time-merge -M mkv
+
+# 按节目日期时间回看；未指定时区时使用本地时区
+N_m3u8DL-RE "URL" --live-catchup "2026-10-10T21:00:00+08:00" --live-record-limit "00:30:00" --live-real-time-merge -M mkv
+
+# 需要清单提供可靠的时间信息，且起点仍在服务端回看窗口内。
+# 按完整分片下载，边界可能略有偏差；未设置录制时长时继续录制直到停止。
+```
 
 ## 其他
 从 v0.1.5 开始，可以尝试开启 `live-pipe-mux` 来代替以上命令

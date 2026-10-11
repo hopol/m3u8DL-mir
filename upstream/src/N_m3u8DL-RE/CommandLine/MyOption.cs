@@ -119,6 +119,13 @@ internal class MyOption
     /// </summary>
     public bool UseFFmpegConcatDemuxer { get; set; }
     /// <summary>
+    /// See: <see cref="CommandInvoker.FFmpegConcatMode"/>.
+    /// </summary>
+    public FFmpegConcatMode FFmpegConcatMode { get; set; }
+    // 旧布尔参数仍可选择文件列表模式，统一得到实际使用的合并方式。
+    internal FFmpegConcatMode EffectiveConcatMode => UseFFmpegConcatDemuxer
+        ? Enum.FFmpegConcatMode.DEMUXER : FFmpegConcatMode;
+    /// <summary>
     /// See: <see cref="CommandInvoker.DelAfterDone"/>.
     /// </summary>
     public bool DelAfterDone { get; set; }
@@ -287,6 +294,20 @@ internal class MyOption
     /// See: <see cref="CommandInvoker.LiveTakeCount"/>.
     /// </summary>
     public int LiveTakeCount { get; set; }
+
+    /// <summary>
+    /// See: <see cref="CommandInvoker.LiveCatchupOption"/>.
+    /// 支持从当前时间回退的正数 HH:mm:ss 或节目日期时间；未指定时区时使用本地时区。
+    /// 启用后按节目时间选择分片，覆盖 <see cref="LiveTakeCount"/> 的尾片选择。
+    /// </summary>
+    public LiveCatchup? LiveCatchup { get; set; }
+
+    /// <summary>
+    /// 任务调度等待结束后解析并固定的回看起点，未启用回看时为空。
+    /// 清单刷新和录制启动时复用此时间，不重新计算相对回看时长。
+    /// </summary>
+    internal DateTimeOffset? LiveCatchupStart { get; set; }
+
     public MuxOptions? MuxOptions { get; set; }
     // public bool LiveWriteHLS { get; set; } = true;
     /// <summary>

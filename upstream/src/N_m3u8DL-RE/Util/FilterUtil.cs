@@ -48,7 +48,7 @@ public static class FilterUtil
         if (filter.BandwidthMax != null)
             inputs = inputs.Where(i => i.Bandwidth <= filter.BandwidthMax);
         if (filter.Role.HasValue)
-            inputs = inputs.Where(i => i.Role == filter.Role);
+            inputs = inputs.Where(i => i.HasRole(filter.Role.Value));
 
         // Apply "for" selection.
         if (filter.For == "best")
@@ -184,6 +184,40 @@ public static class FilterUtil
         selectedSteams = selectedSteams
             .Where(s => s.Playlist?.MediaParts?.Any(p => p.MediaSegments.Count != 0) == true)
             .ToList();
+        if (selectedSteams.Count == 0)
+            return;
+        if (selectedSteams.All(s => s.Playlist!.IsLive && s.Playlist.MediaParts.All(p => p.PeriodIndex != null)))
+        {
+            // DASH 序号可能在每个 Period 重置，按完整窗口取尾片，并通过 Period/PTO 对齐音视频。
+            var windows = selectedSteams.Select(stream => new
+            {
+                Stream = stream,
+                Segments = stream.Playlist!.MediaParts.SelectMany(part => part.MediaSegments.Select(segment => new
+                {
+                    Segment = segment,
+                    Time = part.PeriodStart is { } start && segment.PresentationTime is { } time
+                        ? (double?)(start + time - (part.PresentationTimeOffset ?? 0)) : null,
+                })).TakeLast(Math.Max(1, takeLastCount)).ToList(),
+            }).ToList();
+            foreach (var window in windows)
+            {
+                // 历史 Period 与当前内容可能有很长的空档，不能为了凑足数量去下载过期媒体。
+                var end = window.Segments[^1];
+                var earliest = end.Time + end.Segment.Duration - Math.Max(1, takeLastCount) *
+                    window.Segments.Max(s => s.Segment.Duration);
+                window.Segments.RemoveAll(s => s.Time < earliest);
+            }
+            var commonStart = windows.Select(window => window.Segments.FirstOrDefault()?.Time).Max();
+            foreach (var window in windows)
+            {
+                var kept = new HashSet<MediaSegment>(window.Segments.Where(s => s.Time == null || commonStart == null ||
+                    s.Time + s.Segment.Duration > commonStart).Select(s => s.Segment), ReferenceEqualityComparer.Instance);
+                foreach (var part in window.Stream.Playlist!.MediaParts)
+                    part.MediaSegments = part.MediaSegments.Where(kept.Contains).ToList();
+                window.Stream.Playlist.RemoveEmptyParts();
+            }
+            return;
+        }
         // 通过Date同步
         if (selectedSteams.All(x => x.Playlist!.MediaParts[0].MediaSegments.All(x => x.DateTime != null)))
         {
@@ -233,7 +267,7 @@ public static class FilterUtil
     {
         if (customRange == null) return;
 
-        Logger.InfoMarkUp($"{ResString.customRangeFound}[Cyan underline]{customRange.InputStr}[/]");
+        Logger.InfoMarkUp($"{ResString.customRangeFound}[turquoise4 underline]{customRange.InputStr}[/]");
         Logger.WarnMarkUp($"[darkorange3_1]{ResString.customRangeWarn}[/]");
 
         var filterByIndex = customRange is { StartSegIndex: not null, EndSegIndex: not null };
@@ -287,7 +321,7 @@ public static class FilterUtil
         var regList = ParseAdKeywords(keywords);
         foreach (var reg in log ? regList : [])
         {
-            Logger.InfoMarkUp($"{ResString.customAdKeywordsFound}[Cyan underline]{reg}[/]");
+            Logger.InfoMarkUp($"{ResString.customAdKeywordsFound}[turquoise4 underline]{reg}[/]");
         }
 
         foreach (var stream in selectedSteams)

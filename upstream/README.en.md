@@ -76,6 +76,33 @@ Help uses the configured UI language. Completion script generation and Tab compl
 
 For Docker, mount the file read-only at `/config/config.conf` and pass `--config /config/config.conf`, independently of the container's HOME or runtime user.
 
+## Utility commands
+
+```text
+# Concatenate file bytes without FFmpeg
+N_m3u8DL-RE concat -i 1.ts -i 2.ts -o combined.ts
+
+# Read a directory in natural filename order; matches *.ts by default, configurable with --pattern
+# --input-dir cannot be combined with -i
+N_m3u8DL-RE concat --input-dir segments --pattern "*.ts" -o combined.ts
+
+# Use FFmpeg to merge TS segments from a directory
+N_m3u8DL-RE merge --input-dir segments -o merged.mp4
+
+# Mux video, audio and subtitles
+# Subtitle timing is adjusted automatically, preserving source files; disable with --auto-subtitle-fix false
+N_m3u8DL-RE mux -i video.mp4 -i audio.m4a -i subtitle.srt -o output.mp4
+
+# Set track language (lang), track title (name) and movie title (--title)
+# --mux-import appends external audio or subtitles; lang and name are optional
+N_m3u8DL-RE mux -i video.mp4 -i "path=audio.m4a:lang=eng:name=English" --mux-import "path=subtitle.srt:lang=zh-Hans:name=Simplified Chinese" --title "Movie Title" -o output.mkv
+# Escape colons within compound values as \:, e.g. path=C\:\media\audio.m4a:lang=eng
+
+# Check tool versions and system environment
+N_m3u8DL-RE doctor
+N_m3u8DL-RE doctor --json > doctor.json
+```
+
 ## Command line parameters
 
 Long automatic names, custom save names and expanded filename patterns are shortened with a hash suffix to reduce collisions. Limits use UTF-8 bytes without splitting Chinese characters or emoji, with space reserved for automatic timestamps and media extensions.
@@ -99,8 +126,8 @@ Options:
   --save-pattern <save-pattern>                           Set output filename pattern. Use "--morehelp save-pattern" for variables and examples
   --log-file-path <log-file-path>                         Set log file path, Example: C:\Logs\log.txt
   --base-url <base-url>                                   Set BaseURL
-  --thread-count <number>                                 Set download thread count [default: CPU thread count]
-  --download-retry-count <number>                         Retries per segment; segmented live recording keeps waiting for recovery after transient network failures [default: 3]
+  --thread-count <number>                                 Set download thread count [default: 10]
+  --download-retry-count <number>                         Retries per segment; segmented live recording keeps waiting for recovery after transient network failures [default: 7]
   --http-request-timeout <seconds>                        HTTP timeout in seconds; segmented live recording adjusts automatically unless specified, also bounds segment read stalls, not total download time [default: 100]
   --force-ansi-console                                    Force assuming the terminal is ANSI-compatible and interactive
   --no-ansi-color                                         Remove ANSI colors
@@ -109,7 +136,8 @@ Options:
   --skip-download                                         Skip download [default: False]
   --check-segments-count                                  Check if the actual number of segments downloaded matches the expected number [default: True]
   --binary-merge                                          Binary merge [default: False]
-  --use-ffmpeg-concat-demuxer                             When merging with ffmpeg, use the concat demuxer instead of the concat protocol [default: False]
+  --ffmpeg-concat-mode <DEMUXER|LOCAL_HTTP|PROTOCOL>      FFmpeg merge input: LOCAL_HTTP local virtual input (default), PROTOCOL opens all segments directly, DEMUXER uses a file list [default: LOCAL_HTTP]
+  --use-ffmpeg-concat-demuxer                             Merge with the concat demuxer; equivalent to --ffmpeg-concat-mode DEMUXER, taking precedence when both are supplied at the same level [default: False]
   --del-after-done                                        Delete temporary files when done [default: True]
   --no-date-info                                          Date information is not written during muxing [default: False]
   --no-log                                                Disable log file output [default: False]
@@ -153,6 +181,7 @@ Options:
   --live-wait-time <SEC>                                  Manually set the live playlist refresh interval
   --live-idle-timeout <SEC>                               Stop recording when a live playlist has no new segments for this many seconds (disabled by default)
   --live-take-count <NUM>                                 Manually set the number of segments downloaded for the first time when recording live [default: 16]
+  --live-catchup <TIME>                                   Download live history from a lookback duration or date/time; overrides --live-take-count
   --mux-import <OPTIONS>                                  When MuxAfterDone enabled, allow to import local media files. Use "--morehelp mux-import" for more details
   -sv, --select-video <OPTIONS>                           Select video streams by regular expressions. Use "--morehelp select-video" for more details
   -sa, --select-audio <OPTIONS>                           Select audio streams by regular expressions. Use "--morehelp select-audio" for more details
@@ -170,6 +199,7 @@ Options:
   --generate-completion <SHELL>                           Print the embedded completion script (powershell)
   -?, -h, --help                                          Show help and usage information
   --version                                               Show version information
+
 ```
 
 `--interface` accepts a network interface name (e.g. `eth1`, `en0` or `Wi-Fi`) or a local IP address. A name constrains the outgoing interface; an IP binds the connection source address. With a proxy, it applies to the connection to the proxy. DNS uses the system resolver. Binding failures are reported without falling back to another interface. Linux binding by name may require additional permissions; the diagnostic includes the system error.
@@ -357,6 +387,29 @@ Examples:
 ```
 
 </details>
+
+## FFmpeg segment merging
+
+The default, `--ffmpeg-concat-mode LOCAL_HTTP`, serves a seekable byte stream through a temporary input listening only on `127.0.0.1`. Segments are opened one at a time without writing a full intermediate file or hitting file-handle and command-line limits caused by segment counts.
+
+- `LOCAL_HTTP`: the default local virtual input, preserving byte concatenation through the concat protocol.
+- `PROTOCOL`: fall back to `concat:file1|file2|…`, opening all segments directly; large inputs can still exhaust file handles.
+- `DEMUXER`: use a concat file list, processing each file's media timeline; results can differ from byte concatenation.
+
+The existing `--use-ffmpeg-concat-demuxer` remains supported. Command-line choices override configuration defaults; when both forms are supplied at the same level, the enabled legacy option takes precedence. The mode only affects FFmpeg segment merging; binary merging, independently initialized sections, and live pipe muxing keep their respective processing flows.
+
+## Live catch-up
+
+```bash
+# Start one hour ago, download 30 minutes and mux to MKV
+N_m3u8DL-RE "URL" --live-catchup "01:00:00" --live-record-limit "00:30:00" --live-real-time-merge -M mkv
+
+# Start at a specific date/time; uses the local timezone when none is specified
+N_m3u8DL-RE "URL" --live-catchup "2026-10-10T21:00:00+08:00" --live-record-limit "00:30:00" --live-real-time-merge -M mkv
+
+# Requires reliable manifest timing and a start within the server's catch-up window.
+# Downloads whole segments, so boundaries may differ slightly; without a recording limit, continues until stopped.
+```
 
 ## Others
 From v0.1.5, you can try to enable `live-pipe-mux` instead of the above command
