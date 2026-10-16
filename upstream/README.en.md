@@ -76,13 +76,24 @@ Help uses the configured UI language. Completion script generation and Tab compl
 
 For Docker, mount the file read-only at `/config/config.conf` and pass `--config /config/config.conf`, independently of the container's HOME or runtime user.
 
+## IPTV channel lists
+
+```text
+# Select HTTP TS live channels interactively and record for 3 minutes
+N_m3u8DL-RE channels.m3u --live-record-limit 00:03:00
+
+# Select by channel name; for=all records all matching channels in separate files
+N_m3u8DL-RE channels.m3u -sv "name=^Channel A$:for=best" --live-record-limit 00:03:00
+N_m3u8DL-RE channels.m3u -sv "name=^Channel:for=all" --live-record-limit 00:03:00
+```
+
 ## Utility commands
 
 ```text
 # Concatenate file bytes without FFmpeg
 N_m3u8DL-RE concat -i 1.ts -i 2.ts -o combined.ts
 
-# Read a directory in natural filename order; matches *.ts by default, configurable with --pattern
+# Read matching files from a directory in natural filename order; matches *.ts by default, configurable with --pattern
 # --input-dir cannot be combined with -i
 N_m3u8DL-RE concat --input-dir segments --pattern "*.ts" -o combined.ts
 
@@ -92,6 +103,17 @@ N_m3u8DL-RE merge --input-dir segments -o merged.mp4
 # Mux video, audio and subtitles
 # Subtitle timing is adjusted automatically, preserving source files; disable with --auto-subtitle-fix false
 N_m3u8DL-RE mux -i video.mp4 -i audio.m4a -i subtitle.srt -o output.mp4
+
+# Merge tracks and mux a single-part VOD download or live recording; original segments are preserved
+N_m3u8DL-RE mux -i index_2026-10-10_23-56-12 -o recording.mkv
+
+# Track directories also accept language and title metadata
+N_m3u8DL-RE mux -i video_segments -i "path=audio_segments:lang=eng:name=English" -i "path=subtitle_segments:lang=chi:name=Chinese" -o recording.mkv
+
+# Merge one track (automatically selecting matching init and decrypted segments)
+N_m3u8DL-RE merge -i video_segments -o video.mp4
+# Binary concatenation also supports encrypted segments for later decryption or processing
+N_m3u8DL-RE concat -i video_segments -o video.mp4
 
 # Set track language (lang), track title (name) and movie title (--title)
 # --mux-import appends external audio or subtitles; lang and name are optional
@@ -109,7 +131,7 @@ Long automatic names, custom save names and expanded filename patterns are short
 
 ```
 Description:
-  N_m3u8DL-RE 0.6.0 20260628
+  N_m3u8DL-RE 0.6.0 20261012
 
 Usage:
   N_m3u8DL-RE <input> [options]
@@ -129,7 +151,7 @@ Options:
   --thread-count <number>                                 Set download thread count [default: 10]
   --download-retry-count <number>                         Retries per segment; segmented live recording keeps waiting for recovery after transient network failures [default: 7]
   --http-request-timeout <seconds>                        HTTP timeout in seconds; segmented live recording adjusts automatically unless specified, also bounds segment read stalls, not total download time [default: 100]
-  --force-ansi-console                                    Force assuming the terminal is ANSI-compatible and interactive
+  --force-ansi-console                                    Force assuming the terminal supports ANSI output
   --no-ansi-color                                         Remove ANSI colors
   --auto-select                                           Automatically selects the best tracks of all types [default: False]
   --skip-merge                                            Skip segments merge [default: False]
@@ -150,7 +172,7 @@ Options:
   --sub-only                                              Select only subtitle tracks [default: False]
   --sub-format <SRT|VTT>                                  Subtitle output format [default: SRT]
   --auto-subtitle-fix                                     Automatically fix subtitles [default: True]
-  --ffmpeg-binary-path <PATH>                             Full path to the ffmpeg binary, like C:\Tools\ffmpeg.exe
+  --ffmpeg-binary-path <PATH>                             Path to the ffmpeg binary, like C:\Tools\ffmpeg.exe
   --log-level <DEBUG|ERROR|INFO|OFF|WARN>                 Set log level [default: INFO]
   --ui-language <en-US|zh-CN|zh-TW>                       Set UI language
   --urlprocessor-args <urlprocessor-args>                 Give these arguments to the URL Processors.
@@ -159,7 +181,7 @@ Options:
                                                           or use --key KEY if all tracks share the same key.
   --key-text-file <key-text-file>                         Set the kid-key file, the program will search the KEY with KID from the file.(Very large file are not recommended)
   --decryption-engine <FFMPEG|MP4DECRYPT|SHAKA_PACKAGER>  Set the third-party program used for decryption [default: MP4DECRYPT]
-  --decryption-binary-path <PATH>                         Full path to the tool used for MP4 decryption, like C:\Tools\mp4decrypt.exe
+  --decryption-binary-path <PATH>                         Path to the tool used for MP4 decryption, like C:\Tools\mp4decrypt.exe
   --mp4-real-time-decryption                              Decrypt MP4 segments in real time [default: False]
   -R, --max-speed <SPEED>                                 Set speed limit, Mbps or Kbps, for example: 15M 100K.
   -M, --mux-after-done <OPTIONS>                          When all works is done, try to mux the downloaded streams. Use "--morehelp mux-after-done" for more details
@@ -192,7 +214,7 @@ Options:
   --ad-keyword <REG>                                      Set URL keywords (regular expressions) for AD segments
   --vod-select-parts                                      Control VOD section selection: omitted = automatic, true = always prompt, false = disable (Space/Enter)
   --vod-list-parts                                        List VOD sections grouped by media configuration, with IDs and total durations, then exit [default: False]
-  --vod-drop-parts <IDS>                                  Drop VOD sections and matching audio/subtitles by --vod-list-parts IDs, e.g. 0,2-4
+  --vod-drop-parts <IDS>                                  Exclude VOD sections and matching audio/subtitles by --vod-list-parts IDs, e.g. 0,2-4
   --disable-update-check                                  Disable version update check [default: False]
   --allow-hls-multi-ext-map                               Allow multiple #EXT-X-MAP in live HLS (experimental; enabled for VOD) [default: False]
   --morehelp <OPTION>                                     Set more help info about one option
@@ -269,7 +291,7 @@ The same sub-keys also work for --select-audio/-sa, --select-subtitle/-ss and th
 * frame=REGEX: match by frame rate
 * channel=REGEX: match by audio channel count (e.g. 6, 2)
 * range=REGEX: match by video range (e.g. SDR, HDR, PQ)
-* url=REGEX: match by segment url
+* url=REGEX: match by stream URL
 * period=REGEX: match by DASH Period id (multi-Period MPD, e.g. ads/chapters)
 * segsMin=number: keep streams with at least number segments
 * segsMax=number: keep streams with at most number segments
@@ -278,7 +300,7 @@ The same sub-keys also work for --select-audio/-sa, --select-subtitle/-ss and th
 * bwMin=int: keep streams with bandwidth >= int Kbps
 * bwMax=int: keep streams with bandwidth <= int Kbps
 * role=string: match by DASH role (Subtitle, Main, Alternate, Supplementary, Commentary, Dub, Description, Sign, Metadata, ForcedSubtitle)
-* for=FOR: how many of the matched streams to keep. best[number], worst[number], all (Default: best)
+* for=FOR: keep best[number] or worst[number] per language, or all matched streams (Default: best)
 
 Examples:
 # select best video
@@ -372,6 +394,7 @@ Set each track's output filename stem using variables. The output extension is a
 * <FrameRate>: video frame rate
 * <VideoRange>: video dynamic range (e.g. SDR, HDR10)
 * <GroupId>: stream group identifier
+* <Name>: stream name or IPTV channel name
 
 Variables are case-sensitive. Missing values become empty strings. Do not include the output extension in the pattern.
 

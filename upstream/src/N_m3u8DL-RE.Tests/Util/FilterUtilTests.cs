@@ -9,6 +9,53 @@ namespace N_m3u8DL_RE.Tests.Util;
 public class FilterUtilTests
 {
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void CountAndDurationBoundsIncludeEquality(bool byDuration, bool minimum)
+    {
+        var streams = Enumerable.Range(1, 3).Select(count => new StreamSpec
+        {
+            Playlist = new() { MediaParts = [new()
+            {
+                MediaSegments = Enumerable.Range(0, count).Select(_ => new MediaSegment { Duration = 1 }).ToList()
+            }] }
+        }).ToArray();
+        var filter = new StreamFilter { For = "all" };
+        if (byDuration)
+        {
+            if (minimum) filter.PlaylistMinDur = 2;
+            else filter.PlaylistMaxDur = 2;
+        }
+        else
+        {
+            if (minimum) filter.SegmentsMinCount = 2;
+            else filter.SegmentsMaxCount = 2;
+        }
+
+        var expected = minimum ? streams[1..] : streams[..2];
+        Assert.Equal(expected, FilterUtil.DoFilterKeep(streams, filter));
+        Assert.Equal(minimum ? streams[..1] : streams[2..], FilterUtil.DoFilterDrop(streams, filter));
+
+        var exact = new StreamFilter { For = "all", SegmentsMinCount = 2, SegmentsMaxCount = 2,
+            PlaylistMinDur = 2, PlaylistMaxDur = 2 };
+        Assert.Same(streams[1], Assert.Single(FilterUtil.DoFilterKeep(streams, exact)));
+    }
+
+    [Fact]
+    public void DropByUrlPreservesAnotherStreamWithTheSameName()
+    {
+        var first = new StreamSpec { Name = "Channel A", Url = "https://example.test/first" };
+        var second = new StreamSpec { Name = "Channel A", Url = "https://example.test/second" };
+        var remaining = FilterUtil.DoFilterDrop([first, second], new StreamFilter
+        {
+            UrlReg = new Regex("/first$"), For = "all"
+        });
+        Assert.Same(second, Assert.Single(remaining));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void RangeAcrossPartsUsesOriginalTimelineAndRemovesUnusedInit(bool byIndex)

@@ -6,11 +6,26 @@ public static class ResString
 
     public static readonly string ReLiveTs = "<RE_LIVE_TS>";
     public static readonly string ReBinaryData = "<RE_BINARY_DATA>";
+    public static string matchIPTV => GetText("matchIPTV");
+    public static string iptvChannels => GetText("iptvChannels");
+    public static string iptvHttpRequired => GetText("iptvHttpRequired");
+    public static string iptvTsRequired => GetText("iptvTsRequired");
+    public static string iptvEntryInvalid => GetText("iptvEntryInvalid");
+    public static string iptvVideoFilterRequired => GetText("iptvVideoFilterRequired");
     public static string cmd_toolsConcat => GetText("cmd_toolsConcat");
     public static string cmd_toolsMerge => GetText("cmd_toolsMerge");
     public static string cmd_toolsMux => GetText("cmd_toolsMux");
     public static string cmd_toolsMuxInput => GetText("cmd_toolsMuxInput");
     public static string cmd_toolsMuxImport => GetText("cmd_toolsMuxImport");
+    public static string toolsRecordingSubtitleEmpty => GetText("toolsRecordingSubtitleEmpty");
+    public static string toolsRecordingEmpty => GetText("toolsRecordingEmpty");
+    public static string toolsRecordingPartsUnsupported => GetText("toolsRecordingPartsUnsupported");
+    public static string toolsRecordingMixed => GetText("toolsRecordingMixed");
+    public static string toolsRecordingMultiInit => GetText("toolsRecordingMultiInit");
+    public static string toolsRecordingInitMissing => GetText("toolsRecordingInitMissing");
+    public static string toolsRecordingIncomplete => GetText("toolsRecordingIncomplete");
+    public static string toolsRecordingEncrypted => GetText("toolsRecordingEncrypted");
+    public static string toolsRecordingSubtitleUnsupported => GetText("toolsRecordingSubtitleUnsupported");
     public static string cmd_toolsTitle => GetText("cmd_toolsTitle");
     public static string toolsTrackInfoFailed => GetText("toolsTrackInfoFailed");
     public static string toolsProcessing => GetText("toolsProcessing");
@@ -31,6 +46,7 @@ public static class ResString
     public static string toolsProcessFailed => GetText("toolsProcessFailed");
     public static string toolsDryRun => GetText("toolsDryRun");
     public static string cmd_toolsInput => GetText("cmd_toolsInput");
+    public static string cmd_toolsConcatOutput => GetText("cmd_toolsConcatOutput");
     public static string cmd_toolsOutput => GetText("cmd_toolsOutput");
     public static string cmd_toolsOverwrite => GetText("cmd_toolsOverwrite");
     public static string cmd_toolsDryRun => GetText("cmd_toolsDryRun");
@@ -69,6 +85,7 @@ public static class ResString
     public static string doctorChecking => GetText("doctorChecking");
     public static string toolsSubtitleProbeMissing => GetText("toolsSubtitleProbeMissing");
     public static string toolsSubtitleProbeFailed => GetText("toolsSubtitleProbeFailed");
+    public static string toolsMediaClockUnknown => GetText("toolsMediaClockUnknown");
     public static string toolsSubtitleClockUnknown => GetText("toolsSubtitleClockUnknown");
     public static string toolsSubtitleFixed => GetText("toolsSubtitleFixed");
     public static string inputInvalid => GetText("inputInvalid");

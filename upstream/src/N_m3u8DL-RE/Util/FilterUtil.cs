@@ -36,13 +36,13 @@ public static class FilterUtil
         if (filter.PeriodIdReg != null)
             inputs = inputs.Where(i => i.PeriodId != null && filter.PeriodIdReg.IsMatch(i.PeriodId));
         if (filter.SegmentsMaxCount != null && inputs.All(i => i.SegmentsCount > 0)) 
-            inputs = inputs.Where(i => i.SegmentsCount < filter.SegmentsMaxCount);
+            inputs = inputs.Where(i => i.SegmentsCount <= filter.SegmentsMaxCount);
         if (filter.SegmentsMinCount != null && inputs.All(i => i.SegmentsCount > 0))
-            inputs = inputs.Where(i => i.SegmentsCount > filter.SegmentsMinCount);
+            inputs = inputs.Where(i => i.SegmentsCount >= filter.SegmentsMinCount);
         if (filter.PlaylistMinDur != null)
-            inputs = inputs.Where(i => i.Playlist?.TotalDuration > filter.PlaylistMinDur);
+            inputs = inputs.Where(i => i.Playlist?.TotalDuration >= filter.PlaylistMinDur);
         if (filter.PlaylistMaxDur != null)
-            inputs = inputs.Where(i => i.Playlist?.TotalDuration < filter.PlaylistMaxDur);
+            inputs = inputs.Where(i => i.Playlist?.TotalDuration <= filter.PlaylistMaxDur);
         if (filter.BandwidthMin != null)
             inputs = inputs.Where(i => i.Bandwidth >= filter.BandwidthMin);
         if (filter.BandwidthMax != null)
@@ -100,7 +100,8 @@ public static class FilterUtil
         var inputs = lists.Where(_ => true);
         var selected = DoFilterKeep(lists, filter);
 
-        inputs = inputs.Where(i => selected.All(s => s.ToString() != i.ToString()));
+        // 显示信息相同的流也可能指向不同地址，只排除实际匹配的流。
+        inputs = inputs.Where(i => !selected.Contains(i));
 
         return inputs.ToList();
     }
@@ -122,8 +123,8 @@ public static class FilterUtil
                 .Title(ResString.promptTitle)
                 .UseConverter(x =>
                 {
-                    if (x.Name != null && x.Name.StartsWith("__"))
-                        return $"[darkslategray1]{x.Name[2..]}[/]";
+                    if (string.IsNullOrEmpty(x.Url) && x.Name != null && x.Name.StartsWith("__"))
+                        return $"[darkslategray1]{x.Name[2..].EscapeMarkup()}[/]";
                     return x.ToString().EscapeMarkup().RemoveMarkup();
                 })
                 .Required()
@@ -138,7 +139,15 @@ public static class FilterUtil
 
         if (basicStreams.Count != 0)
         {
-            prompt.AddChoiceGroup(new StreamSpec() { Name = "__Basic" }, basicStreams);
+            if (basicStreams.Any(stream => !string.IsNullOrEmpty(stream.GroupTitle)))
+            {
+                foreach (var group in basicStreams.GroupBy(stream => stream.GroupTitle ?? "Basic"))
+                    prompt.AddChoiceGroup(new StreamSpec() { Name = "__" + group.Key }, group);
+            }
+            else
+            {
+                prompt.AddChoiceGroup(new StreamSpec() { Name = "__Basic" }, basicStreams);
+            }
         }
 
         if (audios.Count != 0)
