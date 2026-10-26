@@ -124,7 +124,24 @@ internal static class MergeUtil
         return text.ToString();
     }
 
-    public static bool ConcatMediaParts(string binary, string[] files, IReadOnlyList<MediaPart> parts, string output, MediaProcessingProgress? progress = null)
+    internal static string[] VideoTags(string format, IEnumerable<Mediainfo> infos, int videoIndex = 0)
+    {
+        if (format is not (".mp4" or ".mkv"))
+            return [];
+        // MP4 的 HEVC 使用 hvc1；Profile 5 使用 dvh1，Profile 8 保留基础层兼容性。
+        // 其它杜比视界沿用可确认的源标记，不改变 Profile 或层结构。
+        // MKV 的 dvh1 与 DV FourCC 冲突，杜比视界 HEVC 使用 hvc1。
+        return infos.Where(info => info.Type == "Video").Select((info, index) => (info, index))
+            .Where(item => item.info.BaseInfo is "hevc" or "hvc1" or "hev1" ||
+                item.info.BaseInfo?.StartsWith("hevc ", StringComparison.Ordinal) == true)
+            .Where(item => format == ".mp4" || item.info.DolbyVison)
+            .SelectMany(item => new[] { $"-tag:v:{videoIndex + item.index}",
+                format == ".mp4" && item.info.DolbyVison &&
+                (item.info.DolbyVisionProfile == 5 || item.info.DolbyVisionProfile != 8 && item.info.CodecTag is "dvh1" or "dvhe")
+                    ? "dvh1" : "hvc1" }).ToArray();
+    }
+
+    public static bool ConcatMediaParts(string binary, string[] files, IReadOnlyList<MediaPart> parts, string output, MediaProcessingProgress? progress = null, IReadOnlyList<Mediainfo>? mediaInfos = null)
     {
         // init+媒体先形成各自可读取的文件；concat demuxer 重新读取每份配置，
         // 避免直接按字节拼接多个 moov 和发生回退的 tfdt。
@@ -143,8 +160,13 @@ internal static class MergeUtil
                 var path = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(inputs[i]))!, $"{Guid.NewGuid():N}.normalized.mp4");
                 normalized.Add(path);
                 progress?.Begin($"{ResString.processingNormalize} ({i + 1}/{inputs.Length})");
+                var infos = i == 0 && mediaInfos != null ? mediaInfos : MediainfoUtil.ReadTrackInfoAsync(binary,
+                    new OutputFile { Index = i, FilePath = inputs[i] }, default).GetAwaiter().GetResult();
+                if (i == 0)
+                    mediaInfos ??= infos;
+                var tags = string.Join(" ", VideoTags(".mp4", infos));
                 if (InvokeFFmpeg(binary,
-                    $"-loglevel warning -nostdin -y -copyts -avoid_negative_ts disabled -i \"{Path.GetFullPath(inputs[i])}\" -map 0:v? -map 0:a? -map 0:s? -c copy -video_track_timescale 90000 \"{path}\"",
+                    $"-loglevel warning -nostdin -y -copyts -avoid_negative_ts disabled -i \"{Path.GetFullPath(inputs[i])}\" -map 0:v? -map 0:a? -map 0:s? -c copy {BinaryToolUtil.FFmpegStrictOptions} -video_track_timescale 90000 {tags} \"{path}\"",
                     Path.GetDirectoryName(path)!, progress == null ? null : progress.Report) != 0)
                     return false;
                 inputs[i] = path;
@@ -158,9 +180,17 @@ internal static class MergeUtil
                 ? " -mpegts_copyts 1 -muxdelay 0" : "";
             // M4A 扩展名默认选择 ipod muxer；与普通音频合并一致，显式使用 MP4 以支持 AC-3/E-AC-3。
             var formatOptions = Path.GetExtension(output).Equals(".m4a", StringComparison.OrdinalIgnoreCase) ? " -f mp4" : "";
+            var videoTags = "";
+            var format = Path.GetExtension(output).ToLowerInvariant();
+            if (format is ".mp4" or ".mkv")
+            {
+                mediaInfos ??= MediainfoUtil.ReadTrackInfoAsync(binary,
+                    new OutputFile { Index = 0, FilePath = files[0] }, default).GetAwaiter().GetResult();
+                videoTags = " " + string.Join(" ", VideoTags(format, mediaInfos));
+            }
             progress?.Begin(ResString.processingMerge, logStart: false);
             return InvokeFFmpeg(binary,
-                $"-loglevel warning -nostdin -y{copyTs}{offset} -f concat -safe 0 -i \"{listPath}\" -map 0:v? -map 0:a? -map 0:s? -c copy{tsOptions}{formatOptions} \"{Path.GetFullPath(output)}\"",
+                $"-loglevel warning -nostdin -y{copyTs}{offset} -f concat -safe 0 -i \"{listPath}\" -map 0:v? -map 0:a? -map 0:s? -c copy {BinaryToolUtil.FFmpegStrictOptions}{tsOptions}{formatOptions}{videoTags} \"{Path.GetFullPath(output)}\"",
                 Path.GetDirectoryName(Path.GetFullPath(files[0]))!, progress == null ? null : progress.Report,
                 parts.Any(p => p.OutputStart != null) ? null : parts.Sum(p => p.OutputDuration ?? p.MediaSegments.Sum(s => s.Duration))) == 0;
         }
@@ -207,7 +237,7 @@ internal static class MergeUtil
     public static bool MergeByFFmpeg(string binary, string[] files, string outputPath, string muxFormat, bool useAACFilter,
         bool fastStart = false,
         bool writeDate = true, FFmpegConcatMode concatMode = FFmpegConcatMode.LOCAL_HTTP, string poster = "", string audioName = "", string title = "",
-        string copyright = "", string comment = "", string encodingTool = "", string recTime = "", Action<MediaProgress>? progress = null, double? duration = null)
+        string copyright = "", string comment = "", string encodingTool = "", string recTime = "", Action<MediaProgress>? progress = null, double? duration = null, IReadOnlyList<Mediainfo>? mediaInfos = null)
     {
         // 改为绝对路径
         outputPath = Path.GetFullPath(outputPath);
@@ -256,7 +286,7 @@ internal static class MergeUtil
         try
         {
             return MergeByFFmpegAsync(binary, files, outputPath + extension, concatMode, options,
-                overwrite: true, log: true, progress: progress, duration: duration).GetAwaiter().GetResult() == 0;
+                overwrite: true, log: true, progress: progress, duration: duration, mediaInfos: mediaInfos).GetAwaiter().GetResult() == 0;
         }
         catch (Exception ex) when (ex is IOException or SocketException or UnauthorizedAccessException)
         {
@@ -268,8 +298,9 @@ internal static class MergeUtil
     internal static async Task<int> MergeByFFmpegAsync(string binary, string[] files, string output,
         FFmpegConcatMode mode, IReadOnlyList<string>? outputOptions = null, bool overwrite = false,
         bool log = false, CancellationToken token = default, Action<MediaProgress>? progress = null, double? duration = null,
-        string[]? inputPaths = null, bool loopbackInput = false)
+        string[]? inputPaths = null, bool loopbackInput = false, IReadOnlyList<Mediainfo>? mediaInfos = null)
     {
+        var firstInput = files[0];
         files = inputPaths ?? files.Select(Path.GetFullPath).ToArray();
         ConcatInputServer? server = null;
         string? list = null;
@@ -312,6 +343,15 @@ internal static class MergeUtil
                     arguments.AddRange(["-c:s", "mov_text"]);
                 if (format == ".m4a")
                     arguments.AddRange(["-vn", "-sn"]);
+            }
+            arguments.AddRange(BinaryToolUtil.FFmpegStrictArguments);
+            var outputFormat = Path.GetExtension(output).ToLowerInvariant();
+            if (outputFormat is ".mp4" or ".mkv")
+            {
+                mediaInfos ??= await MediainfoUtil.ReadTrackInfoAsync(binary,
+                    new OutputFile { Index = 0, FilePath = firstInput, Segments = mode == FFmpegConcatMode.DEMUXER ? null : files },
+                    token).ConfigureAwait(false);
+                arguments.AddRange(VideoTags(outputFormat, mediaInfos));
             }
             arguments.Add(Path.GetFullPath(output));
             var result = await RunMediaToolAsync(binary, arguments, token, log, server != null || loopbackInput, progress: progress, duration: duration).ConfigureAwait(false);
@@ -414,10 +454,10 @@ internal static class MergeUtil
             // MediaType. A "video" input isn't always video-only: some sites hand
             // out one combined file per rendition (audio muxed into the same
             // stream), and restricting that input to just ":v?" would silently
-            // drop its audio. With metadata, map each known track explicitly;
-            // otherwise use optional ":v?/:a?/:s?" maps. M4A keeps only audio.
+            // drop its audio. Map known tracks explicitly when setting metadata or
+            // video tags; otherwise use optional ":v?/:a?/:s?" maps. M4A keeps only audio.
             var trackCounts = new Dictionary<string, int> { ["Video"] = 0, ["Audio"] = 0, ["Subtitle"] = 0 };
-            if (downloadDefaults || files.Any(file => file.LangCode != null || file.Description != null))
+            if (downloadDefaults || format is ".mp4" or ".mkv" || files.Any(file => file.LangCode != null || file.Description != null))
             {
                 // 用真实轨道数量定位元数据；复用下载时已读取的信息，MP4 直接读 box。
                 /**
@@ -428,7 +468,9 @@ internal static class MergeUtil
                 var streamIndex = 0;
                 for (var i = 0; i < files.Length; i++)
                 {
-                    var types = await MediainfoUtil.ReadTrackTypesAsync(binary, files[i], token).ConfigureAwait(false);
+                    var infos = await MediainfoUtil.ReadTrackInfoAsync(binary, files[i], token).ConfigureAwait(false);
+                    var types = infos.Select(info => info.Type).ToArray();
+                    arguments.AddRange(VideoTags(format, infos, trackCounts["Video"]));
                     foreach (var (type, specifier) in new[] { ("Video", "v"), ("Audio", "a"), ("Subtitle", "s") })
                     {
                         if (format == ".m4a" && type != "Audio")
@@ -466,9 +508,10 @@ internal static class MergeUtil
                 arguments.AddRange(["-c:s", files.Any(file => Path.GetExtension(file.FilePath).Equals(".srt", StringComparison.OrdinalIgnoreCase)) ? "srt" : "webvtt"]);
             if (format == ".m4a")
                 arguments.AddRange(["-vn", "-sn"]);
+            arguments.AddRange(BinaryToolUtil.FFmpegStrictArguments);
             if (downloadDefaults)
             {
-                arguments.AddRange(["-strict", "unofficial", "-ignore_unknown", "-copy_unknown"]);
+                arguments.AddRange(["-ignore_unknown", "-copy_unknown"]);
                 if (trackCounts["Video"] > 0)
                     arguments.AddRange(["-disposition:v:0", "default"]);
                 // 字幕都不设置默认

@@ -11,6 +11,8 @@ internal static partial class MediainfoUtil
 {
     [GeneratedRegex("  Stream #.*")]
     private static partial Regex TextRegex();
+    [GeneratedRegex(@"Stream #\d+:\d+")]
+    private static partial Regex StreamIndexRegex();
     [GeneratedRegex(@"#0:\d(\[0x\w+?\])")]
     private static partial Regex IdRegex();
     [GeneratedRegex(": (\\w+): (.*)")]
@@ -25,38 +27,49 @@ internal static partial class MediainfoUtil
     private static partial Regex BitrateRegex();
     [GeneratedRegex(@"(\d+(\.\d+)?) fps")]
     private static partial Regex FpsRegex();
-    [GeneratedRegex(@"DOVI configuration record.*profile: (\d).*compatibility id: (\d)")]
+    [GeneratedRegex(@"DOVI configuration record.*profile: (\d+).*compatibility id: (\d+)")]
     private static partial Regex DoViRegex();
+    [GeneratedRegex(@"\((\w{4}) / 0x[0-9a-fA-F]+\)")]
+    private static partial Regex CodecTagRegex();
     [GeneratedRegex(@"Duration.*?start: (-?\d+(?:\.\d+)?)")]
     private static partial Regex StartRegex();
     [GeneratedRegex(@"Duration:\s*(\d+:\d{2}:\d{2}\.\d+)")]
     private static partial Regex DurationRegex();
 
-    internal static async Task<string[]> ReadStreamTypesAsync(string binary, string file, CancellationToken token)
+    internal static async Task<List<Mediainfo>> ReadTrackInfoAsync(string binary, OutputFile file, CancellationToken token)
     {
-        var result = await ProcessUtil.RunAsync(binary, ["-nostdin", "-hide_banner", "-i", file], token,
-            captureLimit: int.MaxValue).ConfigureAwait(false);
-        return TextRegex().Matches(result.Error).Select(stream => TypeRegex().Match(stream.Value).Groups[1].Value)
-            .Where(type => type is "Video" or "Audio" or "Subtitle").ToArray();
-    }
-
-    internal static async Task<string[]> ReadTrackTypesAsync(string binary, OutputFile file, CancellationToken token)
-    {
-        var cached = file.Mediainfos.Select(info => info.Type).Where(type => type is "Video" or "Audio" or "Subtitle")
-            .Select(type => type!).ToArray();
-        if (cached.Length > 0)
-            return cached;
-        var extension = Path.GetExtension(file.FilePath).ToLowerInvariant();
-        string[]? types;
+        // 下载和录制已经识别过轨道，后续混流直接复用，避免重复启动 FFmpeg。
+        if (file.Mediainfos.Any(info => info.Type is "Video" or "Audio" or "Subtitle"))
+            return file.Mediainfos;
+        var input = file.Segments?.FirstOrDefault() ?? file.FilePath;
+        var extension = Path.GetExtension(input).ToLowerInvariant();
+        List<Mediainfo>? infos = null;
         if (extension is ".mp4" or ".m4a" or ".m4v" or ".mov" or ".m4s")
-            types = MP4MediaInfoUtil.ReadTrackTypes(file.FilePath, token);
+        {
+            using var stream = file.Segments == null ? File.OpenRead(input) : (Stream)new ConcatInputStream(file.Segments);
+            infos = MP4MediaInfoUtil.ReadTrackInfo(stream, token)?.Select(track => new Mediainfo
+            {
+                Type = track.Type,
+                BaseInfo = track.DolbyVision ? "hevc" : track.CodecTag,
+                DolbyVison = track.DolbyVision,
+                CodecTag = track.CodecTag,
+                DolbyVisionProfile = track.DolbyVisionProfile
+            }).ToList();
+        }
         else if (extension is ".srt" or ".vtt" or ".ass" or ".ssa" or ".sup" or ".idx")
-            types = ["Subtitle"];
-        else
-            types = await ReadStreamTypesAsync(binary, file.FilePath, token).ConfigureAwait(false);
-        if (types == null || types.Length == 0)
+            infos = [new Mediainfo { Type = "Subtitle" }];
+        if (infos == null)
+        {
+            // 尚无媒体信息的输入只识别一次；裸分片需按完整虚拟输入读取。
+            using var server = file.Segments == null ? null : new ConcatInputServer(file.Segments);
+            infos = await ReadInfoAsync(binary, server?.Url ?? input, token, loopbackInput: server != null).ConfigureAwait(false);
+            if (server?.Error is { } error)
+                throw new IOException(string.Format(ResString.ffmpegConcatInputFailed, error.Message), error);
+        }
+        if (!infos.Any(info => info.Type is "Video" or "Audio" or "Subtitle"))
             throw new ArgumentException($"{ResString.toolsTrackInfoFailed}: {file.FilePath}");
-        return types;
+        file.Mediainfos = infos;
+        return infos;
     }
 
     internal static async Task<(double Start, double Duration)?> ReadTimingAsync(string binary, string file, CancellationToken token,
@@ -78,19 +91,22 @@ internal static partial class MediainfoUtil
         return seconds > 0 ? (origin, seconds) : null;
     }
 
-    public static async Task<List<Mediainfo>> ReadInfoAsync(string binary, string file)
+    public static async Task<List<Mediainfo>> ReadInfoAsync(string binary, string file, CancellationToken token = default, bool loopbackInput = false)
     {
         var result = new List<Mediainfo>();
 
-        if (string.IsNullOrEmpty(file) || !File.Exists(file)) return result;
+        if (string.IsNullOrEmpty(file) || !loopbackInput && !File.Exists(file)) return result;
 
         // 探测进程不能抢占终端输入或切换终端模式，空格/回车留给程序的选择界面。
         // 复用统一的管道读取和进程管理。
-        var probe = await ProcessUtil.RunAsync(binary, ["-nostdin", "-hide_banner", "-i", file], default,
-            captureLimit: int.MaxValue).ConfigureAwait(false);
+        var probe = await ProcessUtil.RunAsync(binary, ["-nostdin", "-hide_banner", "-i", file], token,
+            captureLimit: int.MaxValue, loopbackInput: loopbackInput).ConfigureAwait(false);
         var output = probe.Error;
 
-        foreach (Match stream in TextRegex().Matches(output))
+        // TS 的多个 Program 可能共用同一条流，FFmpeg 会重复打印，轨道只能计入一次。
+        var streams = TextRegex().Matches(output);
+        foreach (var (stream, index) in streams.Select((stream, index) => (stream, index))
+            .DistinctBy(item => StreamIndexRegex().Match(item.stream.Value).Value))
         {
             var info = new Mediainfo()
             {
@@ -106,13 +122,19 @@ internal static partial class MediainfoUtil
             info.BaseInfo = ReplaceRegex().Replace(info.BaseInfo, "");
             info.HDR = info.Text.Contains("/bt2020/");
 
+            info.CodecTag = CodecTagRegex().Match(stream.Value) is { Success: true } tag ? tag.Groups[1].Value : null;
+            // 配置附属于当前轨道，不能把一条杜比视界轨道的 Profile 套到其它视频上。
+            var details = output[stream.Index..(index + 1 < streams.Count ? streams[index + 1].Index : output.Length)];
+            var dovi = DoViRegex().Match(details);
             if (info.BaseInfo.Contains("dvhe")
                 || info.BaseInfo.Contains("dvh1")
                 || info.BaseInfo.Contains("DOVI")
                 || info.Type.Contains("dvvideo")
-                || (DoViRegex().IsMatch(output) && info.Type == "Video")
+                || (dovi.Success && info.Type == "Video")
                )
                 info.DolbyVison = true;
+            if (info.Type == "Video" && dovi.Success && int.TryParse(dovi.Groups[1].Value, out var profile))
+                info.DolbyVisionProfile = profile;
 
             if (StartRegex().IsMatch(output))
             {

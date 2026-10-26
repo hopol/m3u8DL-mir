@@ -138,6 +138,14 @@ internal sealed partial class RecordingTrack
                     _ => MediaType.SUBTITLES
                 };
                 outputFile.LangCode ??= tracks[0].Language;
+                outputFile.Mediainfos = [new Mediainfo
+                {
+                    Type = tracks[0].Type,
+                    BaseInfo = tracks[0].DolbyVision ? "hevc" : tracks[0].CodecTag,
+                    DolbyVison = tracks[0].DolbyVision,
+                    CodecTag = tracks[0].CodecTag,
+                    DolbyVisionProfile = tracks[0].DolbyVisionProfile
+                }];
                 ttml = MP4TtmlUtil.CheckInit(data);
                 var (vtt, timescale) = MP4VttUtil.CheckInit(data);
                 if (vtt)
@@ -266,7 +274,8 @@ internal sealed partial class RecordingTrack
         {
             Index = Info.Index, FilePath = path, Segments = segmentsInput, SubtitleTimestampMap = timestampMap?.Header,
             MediaType = Info.MediaType, LangCode = Info.LangCode,
-            Description = Info.Description, Duration = Info.Duration, PreserveTimestamp = Info.PreserveTimestamp
+            Description = Info.Description, Duration = Info.Duration, PreserveTimestamp = Info.PreserveTimestamp,
+            Mediainfos = Info.MediaType == MediaType.SUBTITLES ? [] : Info.Mediainfos
         };
     }
 }

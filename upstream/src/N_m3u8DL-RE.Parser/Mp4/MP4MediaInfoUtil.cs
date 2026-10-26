@@ -111,20 +111,28 @@ public static class MP4MediaInfoUtil
     public static string[]? ReadTrackTypes(string file, CancellationToken token = default) =>
         ReadTrackInfo(file, token)?.Select(track => track.Type).ToArray();
 
-    public static (string Type, string? Language)[]? ReadTrackInfo(string file, CancellationToken token = default)
+    public static (string Type, string? Language, string? CodecTag, bool DolbyVision, int? DolbyVisionProfile)[]? ReadTrackInfo(string file, CancellationToken token = default)
     {
         using var stream = File.OpenRead(file);
-        using var reader = new BinaryReader2(stream);
+        return ReadTrackInfo(stream, token);
+    }
+
+    public static (string Type, string? Language, string? CodecTag, bool DolbyVision, int? DolbyVisionProfile)[]? ReadTrackInfo(Stream stream, CancellationToken token = default)
+    {
+        using var reader = new BinaryReader2(stream, leaveOpen: true);
         var moov = ReadMovie(reader, token);
         if (moov == null)
             return null;
-        var tracks = new List<(string Type, string? Language)>();
+        var tracks = new List<(string Type, string? Language, string? CodecTag, bool DolbyVision, int? DolbyVisionProfile)>();
         new MP4Parser()
             .Box("moov", MP4Parser.Children)
             .Box("trak", box =>
             {
                 string? type = null;
                 string? language = null;
+                string? codecTag = null;
+                var dolbyVision = false;
+                int? dolbyVisionProfile = null;
                 new MP4Parser()
                     .Box("mdia", MP4Parser.Children)
                     .FullBox("mdhd", header =>
@@ -143,7 +151,8 @@ public static class MP4MediaInfoUtil
                         token.ThrowIfCancellationRequested();
                         header.Reader.ReadUInt32();
                         var handler = MP4Parser.TypeToString(header.Reader.ReadUInt32());
-                        type = handler switch
+                        // QuickTime 的 minf 还可包含数据处理器 hdlr，不能覆盖媒体类型。
+                        type ??= handler switch
                         {
                             "vide" => "Video",
                             "soun" => "Audio",
@@ -151,9 +160,39 @@ public static class MP4MediaInfoUtil
                             _ => null
                         };
                     })
+                    .Box("minf", MP4Parser.Children)
+                    .Box("stbl", MP4Parser.Children)
+                    .FullBox("stsd", header =>
+                    {
+                        // 结合 HEVC 配置识别杜比视界，区分共用 dvh1 标记的 DV 编码。
+                        if (header.Reader.GetLength() - header.Reader.GetPosition() < 12 || header.Reader.ReadUInt32() == 0)
+                            return;
+                        var size = header.Reader.ReadUInt32();
+                        codecTag = MP4Parser.TypeToString(header.Reader.ReadUInt32());
+                        if (codecTag is not ("hvc1" or "hev1" or "dvh1" or "dvhe") || size < 86 ||
+                            size - 8 > header.Reader.GetLength() - header.Reader.GetPosition())
+                            return;
+                        header.Reader.ReadBytes(78); // VisualSampleEntry fields
+                        var hevc = false;
+                        var dovi = false;
+                        void ReadDolbyVisionProfile(ParsedBox config)
+                        {
+                            dovi = true;
+                            if (config.Reader.GetLength() < 4)
+                                return;
+                            config.Reader.ReadBytes(2); // dv_version_major, dv_version_minor
+                            dolbyVisionProfile = config.Reader.ReadByte() >> 1;
+                        }
+                        new MP4Parser()
+                            .Box("hvcC", _ => hevc = true)
+                            .Box("dvcC", ReadDolbyVisionProfile)
+                            .Box("dvvC", ReadDolbyVisionProfile)
+                            .Parse(header.Reader.ReadBytes((int)size - 86));
+                        dolbyVision = hevc && (dovi || codecTag is "dvh1" or "dvhe");
+                    })
                     .Parse(box.Reader.ReadBytes((int)box.Reader.GetLength()));
                 if (type != null)
-                    tracks.Add((type, language == "und" ? null : language));
+                    tracks.Add((type, language == "und" ? null : language, codecTag, dolbyVision, dolbyVision ? dolbyVisionProfile : null));
             })
             .Parse(moov);
         return tracks.ToArray();

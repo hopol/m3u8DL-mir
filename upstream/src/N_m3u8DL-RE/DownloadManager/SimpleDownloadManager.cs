@@ -69,15 +69,18 @@ internal partial class SimpleDownloadManager
         }
     }
 
-    private void ChangeSpecInfo(StreamSpec streamSpec, List<Mediainfo> mediainfos, ref bool useAACFilter)
+    internal async Task<bool> ChangeSpecInfoAsync(StreamSpec streamSpec, List<Mediainfo> mediainfos, bool useAACFilter)
     {
-        if (!DownloaderConfig.MyOptions.BinaryMerge && mediainfos.Any(m => m.DolbyVison))
+        var legacyDolbyVision = mediainfos.Any(m => m.DolbyVison) &&
+            !await BinaryToolUtil.FFmpegSupportsDolbyVisionAsync(DownloaderConfig.MyOptions.FFmpegBinaryPath);
+        if (!DownloaderConfig.MyOptions.BinaryMerge && legacyDolbyVision)
         {
             DownloaderConfig.MyOptions.BinaryMerge = true;
             LogPartOnce("autoBinaryMerge2", () => Logger.WarnMarkUp($"[darkorange3_1]{ResString.autoBinaryMerge2}[/]"));
         }
 
-        if (DownloaderConfig.MyOptions.MuxAfterDone && mediainfos.Any(m => m.DolbyVison))
+        if (DownloaderConfig.MyOptions.MuxAfterDone && legacyDolbyVision &&
+            DownloaderConfig.MyOptions.MuxOptions?.UseMkvmerge != true)
         {
             DownloaderConfig.MyOptions.MuxAfterDone = false;
             LogPartOnce("autoBinaryMerge5", () => Logger.WarnMarkUp($"[darkorange3_1]{ResString.autoBinaryMerge5}[/]"));
@@ -98,6 +101,7 @@ internal partial class SimpleDownloadManager
             if (streamSpec.Extension is null or "ts")
                 streamSpec.Extension = "vtt";
         }
+        return useAACFilter;
     }
 
     private async Task<bool> DownloadStreamAsync(StreamSpec streamSpec, ProgressTask task, SpeedContainer speedContainer, bool isPart = false)
@@ -293,7 +297,7 @@ internal partial class SimpleDownloadManager
                     LogPartOnce("probe", () => Logger.WarnMarkUp(ResString.readingInfo));
                     mediaInfos = await MediainfoUtil.ReadInfoAsync(DownloaderConfig.MyOptions.FFmpegBinaryPath!, result.ActualFilePath);
                     LogMediaInfo(mediaInfos);
-                    ChangeSpecInfo(streamSpec, mediaInfos, ref useAACFilter);
+                    useAACFilter = await ChangeSpecInfoAsync(streamSpec, mediaInfos, useAACFilter);
                     readInfo = true;
                 }
             }
@@ -382,7 +386,7 @@ internal partial class SimpleDownloadManager
                     LogPartOnce("probe", () => Logger.WarnMarkUp(ResString.readingInfo));
                     mediaInfos = await MediainfoUtil.ReadInfoAsync(DownloaderConfig.MyOptions.FFmpegBinaryPath!, result!.ActualFilePath);
                     LogMediaInfo(mediaInfos);
-                    ChangeSpecInfo(streamSpec, mediaInfos, ref useAACFilter);
+                    useAACFilter = await ChangeSpecInfoAsync(streamSpec, mediaInfos, useAACFilter);
                     readInfo = true;
                 }
             }
@@ -766,7 +770,7 @@ internal partial class SimpleDownloadManager
                 }
                 processing?.Begin(ResString.processingMerge, logStart: false);
                 mergeSuccess = MergeUtil.MergeByFFmpeg(DownloaderConfig.MyOptions.FFmpegBinaryPath!, files, Path.ChangeExtension(ffOut, null), ext, useAACFilter, writeDate: !DownloaderConfig.MyOptions.NoDateInfo, concatMode: concatMode,
-                    progress: processing == null ? null : processing.Report, duration: streamSpec.Playlist.TotalDuration);
+                    progress: processing == null ? null : processing.Report, duration: streamSpec.Playlist.TotalDuration, mediaInfos: mediaInfos);
                 if (mergeSuccess) output = ffOut;
             }
         }
@@ -1010,6 +1014,8 @@ internal partial class SimpleDownloadManager
             {
                 OutputFiles = OutputFiles.Where(o => o.MediaType != MediaType.SUBTITLES).ToList();
             }
+            // 清理列表只包含本次下载参与混流的轨道，外部导入源始终保留。
+            var downloadedFiles = OutputFiles.Select(f => f.FilePath).ToArray();
             if (DownloaderConfig.MyOptions.MuxImports != null)
             {
                 OutputFiles.AddRange(DownloaderConfig.MyOptions.MuxImports);
@@ -1040,13 +1046,14 @@ internal partial class SimpleDownloadManager
                     processing.Begin(ResString.processingFinishing);
                     processing.Report(new(Bytes: new FileInfo(outPath + ext).Length));
                 }
-                // 完成后删除各轨道文件
+                // 完成后删除本次下载的各轨道文件，保留外部导入源
                 if (result)
                 {
                     if (!DownloaderConfig.MyOptions.MuxOptions.KeepFiles)
                     {
                         Logger.WarnMarkUp("[grey]Cleaning files...[/]");
-                        OutputFiles.ForEach(f => File.Delete(f.FilePath));
+                        foreach (var file in downloadedFiles)
+                            File.Delete(file);
                         var tmpDir = DownloaderConfig.MyOptions.TmpDir ?? Environment.CurrentDirectory;
                         OtherUtil.SafeDeleteDir(tmpDir);
                     }
