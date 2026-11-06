@@ -1,5 +1,5 @@
-commit=65ba37d6f61f6c66972addc3af77dc2ced3d1e7d
-timestamp=2026-10-31T07:36:39Z
+commit=7849be8437148b33324d5ba298804d49d3add3d8
+timestamp=2026-11-06T08:37:19Z
 upstream_url=https://github.com/nilaoda/N_m3u8DL-RE
 upstream_branch=main
-source_ref=v0.6.0-beta-62-g65ba37d
+source_ref=v0.6.0-beta-64-g7849be8
